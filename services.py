@@ -11,14 +11,14 @@ logger = logging.getLogger("services")
 
 # HQ SERVICES
 
-async def nasa_event_service():
+async def nasa_feed_service():
     """
     Simulate recieving events from NASA API, send random notification messages every NASA_FEED_INTERVAL seconds to TOPIC_NASAFEED, 
     and save notification message into TABLE
     """
 
     # reset service counter
-    app.storage.user["ui"]["nasaevent"] = 0
+    app.storage.user["ui"]["nasafeed"] = 0
 
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
     table_path = f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"
@@ -36,8 +36,8 @@ async def nasa_event_service():
     items = input_data["collection"]["items"]
     output_topic_name = f"{stream_path}:{TOPIC_NASAFEED}"
 
-    while app.storage.general["services"].get("nasaevent", False):
-        logger.debug("NASA Event Service is running...")
+    while app.storage.general["services"].get("nasafeed", False):
+        logger.debug("NASA Feed Service...")
         count = random.randrange(5)
 
         # pick "count" random items
@@ -78,8 +78,8 @@ async def nasa_event_service():
             if response:
                 logger.debug("Published image received event to %s", output_topic_name)
                 # notify ui that we have new message
-                if "nasaevent" in app.storage.user["ui"]:
-                    app.storage.user["ui"]["nasaevent"] += 1
+                if "nasafeed" in app.storage.user["ui"]:
+                    app.storage.user["ui"]["nasafeed"] += 1
             else:
                 logger.warning("Publish failed for assetID %s", message['assetID'])
 
@@ -90,5 +90,5 @@ async def nasa_event_service():
         await asyncio.sleep(NASA_FEED_DELAY)
 
     # when finished, ensure service is turned off
-    app.storage.general["services"]["nasaevent"] = False
+    app.storage.general["services"]["nasafeed"] = False
 
