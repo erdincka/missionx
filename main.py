@@ -8,12 +8,13 @@ import inspect
 from functions import *
 
 from helpers import *
+from services import asset_broadcast_service, nasa_feed_service, image_download_service
 
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                 format="%(asctime)s:%(levelname)s:%(funcName)s: %(message)s",
                 datefmt='%H:%M:%S')
 
-logger = logging.getLogger(APP_NAME)
+logger = logging.getLogger()
 
 # https://sam.hooke.me/note/2023/10/nicegui-binding-propagation-warning/
 binding.MAX_PROPAGATION_TIME = 0.05
@@ -22,20 +23,25 @@ TITLE = "Data Fabric Core to Edge Demo"
 STORAGE_SECRET = "ezmer@1r0cks"
 
 @ui.page("/")
-def home():
+async def home():
     if "ui" not in app.storage.general.keys():
         app.storage.general["ui"] = {}
-    # Reset service statuses for each run
-    app.storage.general["services"] = {}
 
-    # and previous run state if it was hang
+    if "services" not in app.storage.general.keys():
+        app.storage.general["services"] = {}
+
+    # Reset previous run state if it was hang
     app.storage.user["busy"] = False
 
-    # and ui counters
-    app.storage.user["ui"] = {}
+    # ui counters
+    app.storage.general["nasafeed_count"] = 0
+    app.storage.general["imagedownload_count"] = 0
+    app.storage.general["assetrequest_count"] = 0
+    app.storage.general["assetbroadcast_count"] = 0
+    app.storage.general["upstreamcomm_count"] = 0
 
     # and image list
-    app.storage.user["hqimages"] = []
+    app.storage.general["hqimages"] = []
 
     with ui.header(elevated=True).style('background-color: #3874c8').classes('items-center justify-between uppercase'):
         ui.label(APP_NAME)
@@ -68,7 +74,7 @@ def home():
         caption="Core to Edge end to end pipeline processing using Ezmeral Data Fabric",
     ).classes("w-full").classes("text-bold"):
         ui.markdown(DEMO["description"]).classes("font-normal")
-        ui.image(importlib_resources.files("app").joinpath(DEMO["image"])).classes(
+        ui.image(importlib_resources.files("main").joinpath(DEMO["image"])).classes(
             "object-scale-down g-10"
         )
 
@@ -90,58 +96,41 @@ def home():
 
     ui.separator()
 
-    # Dashboards
-    with ui.splitter().classes("w-full") as splitter:
-        with splitter.before:
-            with ui.row().classes("w-full items-center p-1"):
-                ui.label("HQ Dashboard").classes("mr-2 text-bold")
+    # HQ
+    ui.label("HQ Dashboard").classes("text-bold")
 
-                ui.space()
+    with ui.row().classes("w-full place-items-center"):
+        ui.label("Services")
+        ui.space()
+        for svc in SERVICES["HQ"]:
+            service_status(svc)
+            ui.space()
 
-                for svc in SERVICES["HQ"]:
-                    service_status(svc)                    
+    with ui.scroll_area().classes("w-full h-80"):
+        with ui.grid(columns=6).classes("p-1") as images:
+            ui.timer(0.5, lambda: imageshow("hqimages"))
 
-                ui.space()
 
-                with ui.row():
-                    ui.label("Feed: ")
-                    ui.label().bind_text_from(app.storage.user["ui"], "nasaevent")
-                with ui.row():
-                    ui.label("Assets: ")
-                    ui.label().bind_text_from(app.storage.user["ui"], "imagedownload")
-                with ui.row():
-                    ui.label("Requests: ")
-                    ui.label().bind_text_from(app.storage.user["ui"], "assetrequest")
-            ui.separator()
+    ui.space()
 
-            with ui.scroll_area().classes("w-full h-80"):
-                with ui.grid(columns=3).classes("p-1") as images:
-                    # ui.timer(0.5, lambda: imageshow("hqimages"))
-                    pass
+    log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
+    logger.addHandler(LogElementHandler(log, logging.INFO))
 
-        with splitter.after:
-            with ui.row().classes("w-full items-center p-1"):
-                ui.label("Edge Dashboard").classes("ml-2 text-bold")
+    ui.space()
 
-                ui.space()
+    # EDGE
+    with ui.row().classes("w-full items-center p-1"):
+        ui.label("Edge Dashboard").classes("text-bold")
 
-                # ui.icon("thumb_up").on('click', stream_replica_setup)
+        ui.space()
 
-                ui.space()
+        with ui.row():
+            ui.label("Events: ")
+            ui.label().bind_text_from(app.storage.general, "assetbroadcast_count")
 
-                with ui.row():
-                    ui.label("Events: ")
-                    ui.label().bind_text_from(app.storage.user["ui"], "assetbroadcast")
+            ui.label("Responses: ")
+            ui.label().bind_text_from(app.storage.general, "upstreamcomm_count")
 
-                    ui.label("Responses: ")
-                    ui.label().bind_text_from(app.storage.user["ui"], "upstreamcomm")
-
-                    # ui.button("Stream", on_click=stream_replica_setup, icon="settings").props("flat")
-            ui.separator()
-
-            with ui.grid(columns=3).classes("p-1"):
-                # ui.timer(0.5, lambda: imageshow("edgeimages"))
-                pass
 
 # INSECURE REQUESTS ARE OK in Demos
 requests.packages.urllib3.disable_warnings()
@@ -162,22 +151,7 @@ paramiko_log.setLevel(logging.FATAL)
 charset_log = logging.getLogger("charset_normalizer")
 charset_log.setLevel(logging.FATAL)
 
-# Entry point for the module
-def enter():
-    logger.debug("Running as module")
-    ui.run(
-        title=TITLE,
-        dark=None,
-        storage_secret=STORAGE_SECRET,
-        reload=False,
-        port=3000,
-    )
-
-
-# For development and debugs
 if __name__ in {"__main__", "__mp_main__"}:
-    logger.debug("Running in DEV")
-
     ui.run(
         title=TITLE,
         dark=None,
@@ -185,8 +159,9 @@ if __name__ in {"__main__", "__mp_main__"}:
         reload=True,
         port=3000,
     )
+    # Start services
+    asyncio.get_event_loop().run_in_executor(None, nasa_feed_service)
+    asyncio.get_event_loop().run_in_executor(None, image_download_service)
+    asyncio.get_event_loop().run_in_executor(None, asset_broadcast_service)
 
-# client lifecycle
-# app.on_exception(stop_services)
-# app.on_disconnect(stop_services)
-# app.on_connect(start_services)
+app.on_exception(gracefully_fail)

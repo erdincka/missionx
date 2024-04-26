@@ -1,10 +1,11 @@
 import logging
 import os
 import subprocess
+import textwrap
 from nicegui import app, run
 from helpers import *
 
-logger = logging.getLogger("functions")
+logger = logging.getLogger()
 
 async def run_command(cmd):
     app.storage.user["busy"] = True
@@ -45,7 +46,7 @@ async def prepare():
 def toggle_service(prop: str):
     app.storage.general["services"][prop] = not app.storage.general["services"].get(prop, False)
 
-
+# return buttons to show and control service status
 def service_status(service: tuple):
     name, icon = service
     prop = name.lower().replace(" ", "")
@@ -53,12 +54,38 @@ def service_status(service: tuple):
     if prop not in app.storage.general["services"]:
         app.storage.general["services"][prop] = False
 
-    ui.button(icon=icon, on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("flat round").bind_visibility_from(
+    with ui.button(on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("round").bind_visibility_from(
         app.storage.general["services"], prop
-    )
+    ).classes("size-fit"):
+        ui.icon(icon, size="xl")
+        ui.badge().bind_text_from(app.storage.general, f"{prop}_count").props('floating')
 
-    ui.button(icon=icon, color="none", on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("flat round").bind_visibility_from(
+    with ui.button(color="none", on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("round").bind_visibility_from(
         app.storage.general["services"], prop, backward=lambda x: not x
-    )
+    ).classes("size-fit"):
+        ui.icon(icon, size="xl")
+        ui.badge().bind_text_from(app.storage.general, f"{prop}_count").props('floating')
 
+
+# return image to display on UI
+def imageshow(src):
+    # TODO: delete old images
+    if src in app.storage.general and len(app.storage.general[src]) > 0:
+        title, location = app.storage.general[src].pop(0)
+        # TODO: use /mapr mount
+        img_url = f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{os.environ['MAPR_IP']}:8443/files{location}"
+        with ui.card().tooltip(title).classes("h-64") as img:
+            ui.image(img_url)
+            ui.space()
+            with ui.card_section().classes("align-text-bottom text-sm"):
+                ui.label(textwrap.shorten(title, 24))
+
+        return img
+
+
+# Handle exceptions without UI failure
+def gracefully_fail(exc: Exception):
+    print("gracefully failing...")
+    logger.debug("Exception: %s", exc)
+    app.storage.user["busy"] = False
 
