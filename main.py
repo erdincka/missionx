@@ -116,20 +116,22 @@ async def home():
     log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
     logger.addHandler(LogElementHandler(log, logging.INFO))
 
-    ui.space()
+    ui.separator()
 
     # EDGE
-    with ui.row().classes("w-full items-center p-1"):
-        ui.label("Edge Dashboard").classes("text-bold")
+    ui.label("Edge Dashboard").classes("text-bold")
 
+    with ui.row().classes("w-full place-items-center"):
+        ui.label("Services")
         ui.space()
+        for svc in SERVICES["EDGE"]:
+            service_status(svc)
+            ui.space()
 
-        with ui.row():
-            ui.label("Events: ")
-            ui.label().bind_text_from(app.storage.general, "assetbroadcast_count")
+    with ui.scroll_area().classes("w-full h-80"):
+        with ui.grid(columns=6).classes("p-1") as images:
+            ui.timer(0.5, lambda: imageshow("edgeimages"))
 
-            ui.label("Responses: ")
-            ui.label().bind_text_from(app.storage.general, "upstreamcomm_count")
 
 
 # INSECURE REQUESTS ARE OK in Demos

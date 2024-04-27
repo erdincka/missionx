@@ -89,6 +89,7 @@ def nasa_feed_service():
         # add delay to publishing
         sleep(NASA_FEED_DELAY)
 
+
 @fire_and_forget
 def image_download_service():
     """
@@ -185,9 +186,6 @@ def asset_broadcast_service():
     Subscribe to IMAGE_DOWNLOAD topic and publist to ASSET_BROADCAST to notify edge clusters for new asset availability
     """
 
-    logger = logging.getLogger("devel")
-    logger.setLevel(logging.DEBUG)
-
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
 
     input_topic = TOPIC_IMAGE_DOWNLOADED
@@ -219,3 +217,5 @@ def asset_broadcast_service():
 
         # add delay to publishing
         sleep(ASSET_BROADCAST_DELAY)
+
+
