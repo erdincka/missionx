@@ -72,6 +72,7 @@ def broadcast_listener_service():
     input_topic = TOPIC_ASSET_BROADCAST
 
     app.storage.general["services"]["broadcastlistener"] = True
+    app.storage.general["edge_broadcastreceived"] = []
 
     logger.debug("started...")
 
@@ -89,7 +90,7 @@ def broadcast_listener_service():
                 record = json.loads(msg)
                 logger.debug("Received: %s", record)
 
-                app.storage.general.get("edge_broadcastreceived", []).append(record)
+                app.storage.general["edge_broadcastreceived"].append(record)
 
                 app.storage.general["broadcastlistener_count"] = (
                     app.storage.general.get("broadcastlistener_count", 0) + 1

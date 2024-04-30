@@ -320,18 +320,41 @@ async def home():
                         ui.button('Back', on_click=stepper.previous, color="none")
 
             # List the broadcasted messages
-            # with ui.scroll_area().classes("w-full h-48"):
+            with ui.scroll_area().classes("w-full h-48"):
             #     ui.label().bind_text_from(app.storage.general, "edge_broadcastreceived", backward=lambda x: x['title'])
-
-            ui.table(
-                columns=[
-                    {"name": "name", "label": "Asset", "required": True},
-                    {"name": "title", "label": "Title", "required": True},
-                ],
-                rows=app.storage.general.get("edge_broadcastreceived", []),
-                row_key='assetID',
-                pagination=0,
-            ).props('dense separator=None')
+                assets = (
+                    ui.table(
+                        columns=[
+                            {
+                                "name": "assetID",
+                                "label": "Asset",
+                                "field": "assetID",
+                                "required": True,
+                                "align": "left",
+                            },
+                            {
+                                "name": "title",
+                                "label": "Title",
+                                "field": "title",
+                                "required": True,
+                                "align": "left",
+                            },
+                            # {"name": "status", "label": "Status", "field": "status"},
+                        ],
+                        rows=[],
+                        row_key="assetID",
+                        pagination=0,
+                        selection="single"
+                    )
+                    .props("dense separator=None")
+                    .classes("w-full")
+                )
+                ui.timer(
+                    0.5,
+                    lambda: assets.update_rows(
+                        app.storage.general.get("edge_broadcastreceived", [])
+                    ),
+                )
             # The image display widget to show downloaded assets in real-time
             with ui.scroll_area().classes("w-full h-64"):
                 with ui.grid(columns=6).classes("p-1") as images:

@@ -55,7 +55,7 @@ def nasa_feed_service():
         # pick "count" random items
         for item in random.sample(items, count):
             # assign a unique ID for table
-            item["_id"] = str(uuid4())
+            item["_id"] = str(uuid4().hex[:12])
 
             if upsert_document(host=os.environ['MAPR_IP'], table=table_path, json_dict=item):
 
