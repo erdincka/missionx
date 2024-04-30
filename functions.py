@@ -3,6 +3,7 @@ import os
 import subprocess
 import textwrap
 from nicegui import app, run
+import requests
 from helpers import *
 
 logger = logging.getLogger()
@@ -15,12 +16,13 @@ async def run_command(cmd):
             logger.info("# %s ==> OK", cmd)
         else:
             logger.info("# %s ==> ERROR", cmd)
+            logger.debug(result)
 
         if result.stdout != "":
             logger.debug(result.stdout)
         if result.stderr != "":
             if "Failed to connect to IPv6" not in result.stderr:
-                logger.debug(result.stderr)
+                logger.debug(result)
             else:
                 logger.debug("ignoring IPv6 errors...")
 
@@ -32,6 +34,7 @@ async def run_command(cmd):
 
 
 async def prepare():
+    # HQ resources
     await run_command(f"maprcli audit data -cluster {os.environ['MAPR_CLUSTER']} -enabled true -retention 1")
     await run_command(f"maprcli config save -cluster {os.environ['MAPR_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
     await run_command(f"maprcli volume create -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
@@ -41,6 +44,13 @@ async def prepare():
     await run_command(f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_LOCAL} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
     await run_command(f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
     await run_command(f"maprcli volume create -name {HQ_MISSION_FILES} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH}/{HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
+    # Edge resources
+    await run_command(f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
+    await run_command(f"echo {os.environ['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {os.environ['MAPR_USER']}")
+    await run_command(f"maprcli audit data -cluster {os.environ['EDGE_CLUSTER']} -enabled true -retention 1")
+    await run_command(f"maprcli config save -cluster {os.environ['EDGE_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
+    await run_command(f"maprcli volume create -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
+    await run_command(f"maprcli volume audit -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
 
 
 def toggle_service(prop: str):
@@ -56,25 +66,25 @@ def service_status(service: tuple):
 
     with ui.button(on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("round").bind_visibility_from(
         app.storage.general["services"], prop
-    ).classes("size-fit"):
-        ui.icon(icon, size="xl")
+    ).classes("size-auto"):
+        ui.icon(icon, size="md")
         ui.badge().bind_text_from(app.storage.general, f"{prop}_count").props('floating')
 
     with ui.button(color="none", on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("round").bind_visibility_from(
         app.storage.general["services"], prop, backward=lambda x: not x
-    ).classes("size-fit"):
-        ui.icon(icon, size="xl")
+    ).classes("size-auto"):
+        ui.icon(icon, size="md")
         ui.badge().bind_text_from(app.storage.general, f"{prop}_count").props('floating')
 
 
 # return image to display on UI
-def imageshow(src):
+def imageshow(host: str, src: str):
     # TODO: delete old images
     if src in app.storage.general and len(app.storage.general[src]) > 0:
         title, location = app.storage.general[src].pop(0)
         # TODO: use /mapr mount
-        img_url = f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{os.environ['MAPR_IP']}:8443/files{location}"
-        with ui.card().tooltip(title).classes("h-64") as img:
+        img_url = f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{location}"
+        with ui.card().tooltip(title).classes("h-48") as img:
             ui.image(img_url)
             ui.space()
             with ui.card_section().classes("align-text-bottom text-sm"):
@@ -83,9 +93,37 @@ def imageshow(src):
         return img
 
 
+# display messages received from broadcast
+# def messageshow():
+#     while len(app.storage.general.get("edge_broadcastreceived", [])) > 0:
+#         logger.warning(
+#             f"FOUND {app.storage.general['edge_broadcastreceived']}"
+#         )
+#         record = app.storage.general["edge_broadcastreceived"].pop()
+#         logger.warning(record)
+#         ui.label(f"{record['assetID']}: {record['title']}")
+
+
+# create replica stream from HQ to Edge
+def stream_replica_setup():
+    source_stream_path = f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
+    target_stream_path = f"{EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"
+
+    REST_URL = f"https://{os.environ['MAPR_IP']}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{os.environ['EDGE_CLUSTER']}{target_stream_path}&multimaster=true"
+    AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
+
+    response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+    response.raise_for_status()
+
+    if response:
+        obj = response.json()
+        logger.info("Stream replica: %s", obj)
+    else:
+        logger.warning("Cannot get stream replica")
+
+
 # Handle exceptions without UI failure
 def gracefully_fail(exc: Exception):
     print("gracefully failing...")
     logger.debug("Exception: %s", exc)
     app.storage.user["busy"] = False
-

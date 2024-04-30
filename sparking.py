@@ -2,24 +2,36 @@ import os
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
-from helpers import HQ_VOLUME_PATH, STREAM_LOCAL, TOPIC_NASAFEED
+def spark_kafka_consumer(host: str, stream: str, topic: str):
 
-def assetdownload():
+    spark_jars = ",".join(
+        [
+            "/opt/mapr/spark/spark-3.3.3/jars/spark-sql-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
+            "/opt/mapr/spark/spark-3.3.3/jars/kafka-clients-2.6.1.700-eep-921.jar",
+            "/opt/mapr/spark/spark-3.3.3/jars/spark-streaming-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
+            "/opt/mapr/spark/spark-3.3.3/jars/spark-token-provider-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
+        ]
+    )
+
     # Create Spark session
-    spark = SparkSession.builder \
-        .appName("KafkaStreaming") \
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    spark = (
+        SparkSession.builder.appName("KafkaStreaming")
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+        # .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.3.0-eep-921")
+        .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0")
+        .config("spark.jars", spark_jars)
         .getOrCreate()
+    )
 
     # Define Kafka parameters
     kafka_params = {
-        "kafka.bootstrap.servers": f"{os.environ['MAPR_IP']}:9092",
-        "subscribe": f"{STREAM_LOCAL}:{TOPIC_NASAFEED}",
+        "kafka.bootstrap.servers": f"{host}:9092",
+        "subscribe": f"{stream}:{topic}",
         "startingOffsets": "earliest",
         "kafka.security.protocol": "SASL_PLAINTEXT",
         "kafka.sasl.mechanism": "PLAIN",
-        "kafka.sasl.jaas.config": f'org.apache.kafka.common.security.plain.PlainLoginModule required username="{os.environ['MAPR_USER']}" password="{os.environ['MAPR_PASS']}";'
+        "kafka.sasl.jaas.config": f"org.apache.kafka.common.security.plain.PlainLoginModule required username=\"{os.environ['MAPR_USER']}\" password=\"{os.environ['MAPR_PASS']}\";"
     }
 
     # Define schema for incoming Kafka messages
@@ -34,7 +46,7 @@ def assetdownload():
         StructField("description", StringType(), True),
         StructField("thumbnail", StringType(), True),
     ])
-    
+
     # Read from Kafka and apply schema
     df = spark \
     .readStream \
@@ -42,44 +54,55 @@ def assetdownload():
     .options(**kafka_params) \
     .option("failOnDataLoss", "false") \
     .load() \
-    .selectExpr("CAST(value AS STRING)") \
-    .selectExpr("SPLIT(value, ',') AS data") \
-    .selectExpr(
-        "data[0] AS _id",
-        "data[1] AS center",
-        "data[2] AS search_term",
-        "data[3] AS media_type",
-        "data[4] AS date_created",
-        "data[5] AS title",
-        "data[6] AS nasa_id",
-        "data[7] AS description",
-        "data[8] AS thumbnail",
-    )
-    
-    # Define the Delta table path
-    delta_table_path = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_NASAFEED}_delta" 
+    # .selectExpr("CAST(value AS STRING)") \
+    # .selectExpr("SPLIT(value, ',') AS data") \
+    # .selectExpr(
+    #     "data[0] AS _id",
+    #     "data[1] AS center",
+    #     "data[2] AS search_term",
+    #     "data[3] AS media_type",
+    #     "data[4] AS date_created",
+    #     "data[5] AS title",
+    #     "data[6] AS nasa_id",
+    #     "data[7] AS description",
+    #     "data[8] AS thumbnail",
+    # )
 
-    # Define the checkpoint directory path
-    checkpoint_dir = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_NASAFEED}_checkpoint"  
+    yield df
+
+    # # Define the Delta table path
+    # delta_table_path = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_NASAFEED}_delta"
+
+    # # Define the checkpoint directory path
+    # checkpoint_dir = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_NASAFEED}_checkpoint"
 
     # Write the stream to the Delta table with a processing time trigger
     query = df \
         .writeStream \
-        .format("delta") \
+        .format("console") \
         .outputMode("append") \
-        .trigger(processingTime="1 second") \
-        .option("checkpointLocation", checkpoint_dir) \
-        .option("mergeSchema", "true") \
-        .start(delta_table_path)
+        .start() \
+        .awaitTermination(30)
+    # .format("delta") \
+    # .trigger(processingTime="1 second") \
+    # .option("mergeSchema", "true") \
+    # .option("checkpointLocation", checkpoint_dir) \
+    # .start(delta_table_path)
 
-    # Wait for the termination
-    query.awaitTermination(60)
+    # # Wait for the termination
+    # query.awaitTermination(60)
 
-    # Read from Delta table
-    delta_df = spark.read.format("delta").load(delta_table_path)
+    # # Read from Delta table
+    # delta_df = spark.read.format("delta").load(delta_table_path)
 
-    # Show the first 10 rows
-    delta_df.show(10)
+    # # Show the first 10 rows
+    # delta_df.show(10)
 
     # Stop Spark session
     spark.stop()
+
+
+if __name__ == "__main__":
+    for a in spark_kafka_consumer("10.1.1.32", "/apps/edge-missionX/edge-replicatedStream", "ASSET_BROADCAST"):
+        # print(a)
+        pass

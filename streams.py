@@ -1,4 +1,8 @@
 import logging
+from time import sleep
+import timeit
+
+from helpers import BROADCAST_LISTENER_DELAY
 
 
 logger = logging.getLogger()
@@ -24,25 +28,42 @@ def produce(stream: str, topic: str, messages: list):
 def consume(stream: str, topic: str):
     from confluent_kafka import Consumer, KafkaError
 
-    c = Consumer(
-        {"group.id": "mygroup", "default.topic.config": {"auto.offset.reset": "earliest"}}
+    consumer = Consumer(
+        {"group.id": "ezshow", "default.topic.config": {"auto.offset.reset": "earliest"}}
     )
 
-    c.subscribe([f"{stream}:{topic}"])
+    consumer.subscribe([f"{stream}:{topic}"])
 
     running = True
+    start_time = timeit.default_timer()
+
     while running:
-        msg = c.poll(timeout=1.0)
+        try:
+            message = consumer.poll(timeout=1.0)
 
-        if msg is None: continue
+            if message is None: continue
 
-        if not msg.error():
-            yield msg.value().decode("utf-8")
+            if not message.error():
+                yield message.value().decode("utf-8")
 
-        # elif msg.error().code() != KafkaError._PARTITION_EOF:
-        else:
-            # silently ignore errors
-            logger.debug(msg.error())
+            elif message.error().code() == KafkaError._PARTITION_EOF:
+                running = False
+                continue
+
+            # silently ignore other errors
+            else:
+                logger.debug(message.error())
+
+            # terminate after 2 sec
+            # TODO: re-consider when to timeout
+            if timeit.default_timer() - 2 >= start_time:
+                running = False
+
+            # delay poll
+            sleep(0.2)
+
+        except Exception as error:
+            logger.debug(error)
             running = False
 
-    c.close()
+    consumer.close()

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+from types import FunctionType
 from nicegui import ui
 
 APP_NAME = "missionX"
@@ -11,11 +12,11 @@ DEMO = {
     "image": "core-edge.png",
 }
 
-HQ_VOLUME_NAME = "core-to-edge"
-EDGE_VOLUME_NAME = "edge-to-core"
+HQ_VOLUME_NAME = "missionX"
+HQ_VOLUME_PATH = "/apps/missionX"
 
-HQ_VOLUME_PATH = "/apps/core-to-edge"
-EDGE_VOLUME_PATH = "/apps/edge-to-core"
+EDGE_VOLUME_PATH = "/apps/edge-missionX"
+EDGE_VOLUME_NAME = "edge-missionX"
 
 STREAM_LOCAL = "pipelineStream"
 HQ_STREAM_REPLICATED = "replicatedStream"
@@ -29,12 +30,15 @@ TOPIC_ASSET_REQUEST = "ASSET_REQUEST"
 TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
 NASA_FEED_FILE = "meta/query_results_combined-USE.json"
 IMAGE_FILE_LOCATION = "downloadedAssets"
-HQ_MISSION_FILES = "files-missionX"
-EDGE_MISSION_FILES = "edge-files-missionX"
+HQ_MISSION_FILES = "files"
+EDGE_MISSION_FILES = "edge-files"
 NASA_FEED_DELAY = 5
 IMAGE_DOWNLOAD_SERVICE_DELAY = 5
 IMAGE_DISPLAY_SERVICE_DELAY = 3
 ASSET_BROADCAST_DELAY = 3
+ASSET_REQUEST_DELAY = 3
+BROADCAST_LISTENER_DELAY = 3
+AUDIT_LISTENER_DELAY = 3
 
 SERVICES = {
     "HQ": [
@@ -44,7 +48,8 @@ SERVICES = {
         ("Asset Request", "compare_arrows"),
     ],
     "EDGE": [
-        ("Audit Listener", "hearing"),
+        ("Audit Listener", "cast"),
+        ("Broadcast Listener", "hearing"),
         ("Dashboard Listener", "space_dashboard"),
         ("Image Display", "photo_library"),
     ],
@@ -69,8 +74,9 @@ class LogElementHandler(logging.Handler):
         # change log format for UI
         self.setFormatter(
             logging.Formatter(
-                "%(asctime)s:%(levelname)s: %(message)s",
-                datefmt="%H:%M:%S",
+                # "%(asctime)s:%(levelname)s: %(message)s",
+                # datefmt="%H:%M:%S",
+                "%(message)s",
             )
         )
         try:
@@ -80,3 +86,8 @@ class LogElementHandler(logging.Handler):
             self.element.push(re.sub(ANSI_RE, "", msg))
         except Exception:
             self.handleError(record)
+
+
+def extract_wrapped(decorated):
+    closure = (c.cell_contents for c in decorated.__closure__)
+    return next((c for c in closure if isinstance(c, FunctionType)), None)
