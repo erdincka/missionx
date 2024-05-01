@@ -39,19 +39,23 @@ ASSET_BROADCAST_DELAY = 3
 ASSET_REQUEST_DELAY = 3
 BROADCAST_LISTENER_DELAY = 3
 AUDIT_LISTENER_DELAY = 3
+ASSET_RESPONSE_DELAY = 2
+
+# timeout stream consumers
+MAX_POLL_TIME = 2
 
 SERVICES = {
     "HQ": [
         ("NASA Feed", "rss_feed"),
-        ("Image Download", "photo_album"),
+        ("Image Download", "photo"),
         ("Asset Broadcast", "cell_tower"),
-        ("Asset Request", "compare_arrows"),
+        ("Asset Response", "compare_arrows"),
     ],
     "EDGE": [
         ("Audit Listener", "cast"),
         ("Broadcast Listener", "hearing"),
-        ("Dashboard Listener", "space_dashboard"),
-        ("Image Display", "photo_library"),
+        ("Asset Request", "compare_arrows"),
+        ("Image Viewer", "photo_album"),
     ],
 }
 

@@ -3,13 +3,13 @@ import os
 import importlib_resources
 
 import requests
-from nicegui import app, ui, binding
+from nicegui import app, ui, binding, run
 import inspect
-from edge_services import audit_listener_service, broadcast_listener_service
+from edge_services import asset_request_service, audit_listener_service, broadcast_listener_service
 from functions import *
 
 from helpers import *
-from hq_services import asset_broadcast_service, asset_request_service, nasa_feed_service, image_download_service
+from hq_services import asset_broadcast_service, asset_response_service, nasa_feed_service, image_download_service
 
 logging.basicConfig(level=logging.INFO,
                 format="%(asctime)s:%(levelname)s:%(funcName)s: %(message)s",
@@ -39,6 +39,7 @@ async def home():
     app.storage.general["imagedownload_count"] = 0
     app.storage.general["assetbroadcast_count"] = 0
     app.storage.general["assetrequest_count"] = 0
+    app.storage.general["assetresponse_count"] = 0
     app.storage.general["broadcastlistener_count"] = 0
     app.storage.general["auditlistener_count"] = 0
 
@@ -102,13 +103,13 @@ async def home():
 
     ui.separator()
 
-    with ui.splitter() as splitter:
+    with ui.splitter().classes("px-2") as splitter:
         # HQ Dashboard
         with splitter.before:
             # HQ
             ui.label("HQ Dashboard").classes("text-bold")
 
-            with ui.row().classes("w-full place-items-center"):
+            with ui.row().classes("w-full place-items-center h-16"):
                 ui.label("Services")
                 ui.space()
                 for svc in SERVICES["HQ"]:
@@ -119,9 +120,9 @@ async def home():
                      processed and distributed to various targets, including the field teams working at the edge, as actionable intelligence. \
                      Microservice status for Headquarters are shown above. \
                      You can pause/resume them on clicking their icon. The numbers indicate the processed items for each service. \
-                     We are going to start and explain each service in the following steps.").classes("p-2")
+                     We are going to start and explain each service in the following steps.").classes("h-32")
 
-            with ui.stepper().classes("w-full").props("contracted") as stepper:
+            with ui.stepper().classes("w-full h-96").props("contracted") as stepper:
                 with ui.step('Data Ingestion'):
                     ui.label("Data Ingestion").classes("text-bold")
                     ui.label(
@@ -204,7 +205,7 @@ async def home():
 
                     with ui.expansion("Code", caption="Code to enable service", icon="code").classes("w-full"):
                         ui.code(
-                            inspect.getsource(extract_wrapped(asset_request_service))
+                            inspect.getsource(extract_wrapped(asset_response_service))
                         ).classes("w-full")
 
                     ui.label("Click 'Run' to enable the service")
@@ -213,7 +214,7 @@ async def home():
                         ui.button(
                             "Run",
                             on_click=lambda: asyncio.get_event_loop().run_in_executor(
-                                None, asset_request_service
+                                None, asset_response_service
                             ),
                         )
                         ui.button("Next", on_click=stepper.next, color="secondary")
@@ -253,20 +254,20 @@ async def home():
         # Edge Dashboard
         with splitter.after:
             # EDGE
-            ui.label("Edge Dashboard").classes("p-2 text-bold")
+            ui.label("Edge Dashboard").classes("pl-2 text-bold")
 
-            with ui.row().classes("w-full place-items-center"):
+            with ui.row().classes("w-full place-items-center h-16"):
                 ui.label("Services").classes("p-2")
                 ui.space()
                 for svc in SERVICES["EDGE"]:
                     service_status(svc)
                     ui.space()
 
-                ui.label("Edge services simulate an environment where intermittent connectivity and low-bandwidth data transfers are the norm. \
-                         In such environments, we would like to minimize the data and the overhead, while keeping information relevant and intact. \
-                         All this communication happens bi-directionally in real-time with lightweight messaging service, Ezmeral Event Store.").classes("p-2")
+            ui.label("Edge services simulate an environment where intermittent connectivity and low-bandwidth data transfers are the norm. \
+                        In such environments, we would like to minimize the data and the overhead, while keeping information relevant and intact. \
+                        All this communication happens bi-directionally in real-time with lightweight messaging service, Ezmeral Event Store.").classes("pl-2 h-32")
 
-            with ui.stepper().classes("w-full").props("contracted") as stepper:
+            with ui.stepper().classes("w-full h-96").props("contracted") as stepper:
                 with ui.step("Audit Listener"):
                     ui.label("Audit Listener").classes("text-bold")
                     ui.label(
@@ -319,19 +320,43 @@ async def home():
                         ui.button("Next", on_click=stepper.next, color="secondary")
                         ui.button('Back', on_click=stepper.previous, color="none")
 
+                with ui.step("Asset Request"):
+                    ui.label("Asset Request").classes("text-bold")
+                    ui.label(
+                        "Any assets requested by clicking on the asset data will be put into ASSET_REQUEST topic, so HQ can process and send the asset through the replicated volume."
+                    )
+
+                    with ui.expansion(
+                        "Code", caption="Code to enable service", icon="code"
+                    ).classes("w-full"):
+                        ui.code(
+                            inspect.getsource(extract_wrapped(asset_request_service))
+                        ).classes("w-full")
+
+                    ui.label("Click 'Run' to enable the service")
+
+                    with ui.stepper_navigation():
+                        ui.button(
+                            "Run",
+                            on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                                None, asset_request_service
+                            ),
+                        )
+                        # ui.button("Next", on_click=stepper.next, color="secondary")
+                        ui.button('Back', on_click=stepper.previous, color="none")
+
             # List the broadcasted messages
             with ui.scroll_area().classes("w-full h-48"):
-            #     ui.label().bind_text_from(app.storage.general, "edge_broadcastreceived", backward=lambda x: x['title'])
                 assets = (
                     ui.table(
                         columns=[
-                            {
-                                "name": "assetID",
-                                "label": "Asset",
-                                "field": "assetID",
-                                "required": True,
-                                "align": "left",
-                            },
+                            # {
+                            #     "name": "assetID",
+                            #     "label": "Asset",
+                            #     "field": "assetID",
+                            #     "required": True,
+                            #     "align": "left",
+                            # },
                             {
                                 "name": "title",
                                 "label": "Title",
@@ -339,14 +364,18 @@ async def home():
                                 "required": True,
                                 "align": "left",
                             },
-                            # {"name": "status", "label": "Status", "field": "status"},
+                            {
+                                "name": "status",
+                                "label": "Status",
+                                "field": "status",
+                            }
                         ],
                         rows=[],
                         row_key="assetID",
                         pagination=0,
-                        selection="single"
                     )
-                    .props("dense separator=None")
+                    .on("rowClick", lambda e: make_asset_request(e.args[1]))
+                    .props("dense separator=None wrap-cells")
                     .classes("w-full")
                 )
                 ui.timer(
@@ -393,9 +422,5 @@ if __name__ in {"__main__", "__mp_main__"}:
         reload=True,
         port=3000,
     )
-    # Start services
-    # asyncio.get_event_loop().run_in_executor(None, nasa_feed_service)
-    # asyncio.get_event_loop().run_in_executor(None, image_download_service)
-    # asyncio.get_event_loop().run_in_executor(None, asset_broadcast_service)
 
 app.on_exception(gracefully_fail)

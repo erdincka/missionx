@@ -8,15 +8,14 @@ from helpers import *
 
 logger = logging.getLogger()
 
-async def run_command(cmd):
-    app.storage.user["busy"] = True
+def run_command(cmd):
     try:
-        result = await run.io_bound(subprocess.run, cmd, shell=True, capture_output=True, universal_newlines=True)
+        result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
         if result.returncode == 0:
             logger.info("# %s ==> OK", cmd)
         else:
-            logger.info("# %s ==> ERROR", cmd)
-            logger.debug(result)
+            logger.warning("# %s ==> %s", cmd, result.stdout)
+            logger.debug(result.stderr)
 
         if result.stdout != "":
             logger.debug(result.stdout)
@@ -29,28 +28,27 @@ async def run_command(cmd):
     except Exception as error:
         logger.warning(error)
 
-    finally:
-        app.storage.user["busy"] = False
-
 
 async def prepare():
+    app.storage.user["busy"] = True
     # HQ resources
-    await run_command(f"maprcli audit data -cluster {os.environ['MAPR_CLUSTER']} -enabled true -retention 1")
-    await run_command(f"maprcli config save -cluster {os.environ['MAPR_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
-    await run_command(f"maprcli volume create -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    await run_command(f"maprcli volume audit -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
-    await run_command(f"hadoop mfs -setaudit on {HQ_VOLUME_PATH}")
-    await run_command(f"maprcli table create -path {HQ_VOLUME_PATH}/{HQ_IMAGETABLE} -tabletype json")
-    await run_command(f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_LOCAL} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
-    await run_command(f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
-    await run_command(f"maprcli volume create -name {HQ_MISSION_FILES} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH}/{HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
+    await run.io_bound(run_command, f"maprcli audit data -cluster {os.environ['MAPR_CLUSTER']} -enabled true -retention 1")
+    await run.io_bound(run_command, f"maprcli config save -cluster {os.environ['MAPR_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
+    await run.io_bound(run_command, f"maprcli volume create -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
+    await run.io_bound(run_command, f"maprcli volume audit -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
+    await run.io_bound(run_command, f"hadoop mfs -setaudit on {HQ_VOLUME_PATH}")
+    await run.io_bound(run_command, f"maprcli table create -path {HQ_VOLUME_PATH}/{HQ_IMAGETABLE} -tabletype json")
+    await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_LOCAL} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
+    await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
+    await run.io_bound(run_command, f"maprcli volume create -name {HQ_MISSION_FILES} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH}/{HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     # Edge resources
-    await run_command(f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
-    await run_command(f"echo {os.environ['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {os.environ['MAPR_USER']}")
-    await run_command(f"maprcli audit data -cluster {os.environ['EDGE_CLUSTER']} -enabled true -retention 1")
-    await run_command(f"maprcli config save -cluster {os.environ['EDGE_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
-    await run_command(f"maprcli volume create -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    await run_command(f"maprcli volume audit -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
+    await run.io_bound(run_command, f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
+    await run.io_bound(run_command, f"echo {os.environ['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {os.environ['MAPR_USER']}")
+    await run.io_bound(run_command, f"maprcli audit data -cluster {os.environ['EDGE_CLUSTER']} -enabled true -retention 1")
+    await run.io_bound(run_command, f"maprcli config save -cluster {os.environ['EDGE_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
+    await run.io_bound(run_command, f"maprcli volume create -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
+    await run.io_bound(run_command, f"maprcli volume audit -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
+    app.storage.user["busy"] = False
 
 
 def toggle_service(prop: str):
@@ -93,17 +91,6 @@ def imageshow(host: str, src: str):
         return img
 
 
-# display messages received from broadcast
-# def messageshow():
-#     while len(app.storage.general.get("edge_broadcastreceived", [])) > 0:
-#         logger.warning(
-#             f"FOUND {app.storage.general['edge_broadcastreceived']}"
-#         )
-#         record = app.storage.general["edge_broadcastreceived"].pop()
-#         logger.warning(record)
-#         ui.label(f"{record['assetID']}: {record['title']}")
-
-
 # create replica stream from HQ to Edge
 def stream_replica_setup():
     source_stream_path = f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
@@ -121,6 +108,18 @@ def stream_replica_setup():
     else:
         logger.warning("Cannot get stream replica")
 
+
+# put the request into queue
+def make_asset_request(asset: dict):
+    if "requested_assets" not in app.storage.general.keys():
+        app.storage.general["requested_assets"] = []
+
+    # find and update the requested asset in the broadcast list (just for UI feedback)
+    for a in app.storage.general["edge_broadcastreceived"]:
+        if asset['assetID'] == a['assetID']:
+            a["status"] = "requesting..."
+
+    app.storage.general["requested_assets"].append(asset)
 
 # Handle exceptions without UI failure
 def gracefully_fail(exc: Exception):

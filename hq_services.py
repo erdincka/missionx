@@ -6,6 +6,7 @@ from uuid import uuid4
 import importlib_resources
 from nicegui import app
 from files import putfile
+from functions import run_command
 from helpers import *
 from streams import consume, produce
 from tables import find_document_by_id, upsert_document
@@ -127,7 +128,7 @@ def image_download_service():
                 logger.debug("Found: %s", str(doc))
 
                 if doc is None:
-                    logger.warning("Asset not found %s", imageFilename)
+                    logger.warning("Asset not found for: %s", record["assetID"])
                     failed += 1
 
                 else:
@@ -214,6 +215,13 @@ def asset_broadcast_service():
             record = json.loads(msg)
             logger.debug("Received: %s", record)
 
+            # skip assets that failed to download
+            if msg["status"] == "failed":
+                continue
+
+            # update message status
+            msg["status"] = "broadcast"
+
             # Publish to output topic on the replicated stream
             if produce(
                 stream=replicated_stream_path, topic=output_topic, messages=[msg]
@@ -235,32 +243,49 @@ def asset_broadcast_service():
 
 
 @fire_and_forget
-def  asset_request_service():
+def asset_response_service():
     """
-    Subscribe to ASSET_REQUEST topic and process the requests from Edge clusters
+    Monitor ASSET_REQUEST topic for the requests from Edge
     """
 
-    stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
+    stream_path = f"/mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
+    table_path = f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"
 
     input_topic = TOPIC_ASSET_REQUEST
 
-    app.storage.general["services"]["assetrequest"] = True
+    app.storage.general["services"]["assetresponse"] = True
     logger.debug("started...")
 
     while True:
         # skip if service is disabled by user
-        if not app.storage.general["services"].get("assetrequest", False):
+        if not app.storage.general["services"].get("assetresponse", False):
             logger.debug("sleeping...")
-            sleep(ASSET_REQUEST_DELAY)
+            sleep(ASSET_RESPONSE_DELAY)
             continue
 
         logger.debug("running...")
 
         for msg in consume(stream=stream_path, topic=input_topic):
             record = json.loads(msg)
-            logger.info("Requested asset: %s", record)
+            logger.info("Responding to asset request for: %s", record['title'])
 
-            # TODO: copy requested asset file to the replicated volume
+            doc = find_document_by_id(host=os.environ["MAPR_IP"], table=table_path, docid=record["assetID"])
+            logger.debug("Found: %s", str(doc))
+
+            if doc is None:
+                logger.warning("Asset not found for: %s", record['assetID'])
+
+            else:
+                logger.info("Copying asset from %s", doc["imageDownloadLocation"])
+                # copy file to replicated volume
+                run_command(
+                    f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_VOLUME_PATH}/{HQ_MISSION_FILES}"
+                )
+                logger.info("%s sent to mission volume", doc['imageDownloadLocation'])
+                # notify ui that we have new message
+                app.storage.general["assetresponse_count"] = (
+                    app.storage.general.get("assetresponse_count", 0) + 1
+                )
 
         # add delay to publishing
-        sleep(ASSET_REQUEST_DELAY)
+        sleep(ASSET_RESPONSE_DELAY)

@@ -2,7 +2,7 @@ import logging
 from time import sleep
 import timeit
 
-from helpers import BROADCAST_LISTENER_DELAY
+from helpers import MAX_POLL_TIME
 
 
 logger = logging.getLogger()
@@ -34,36 +34,31 @@ def consume(stream: str, topic: str):
 
     consumer.subscribe([f"{stream}:{topic}"])
 
-    running = True
+    logger.debug("polling %s", topic)
     start_time = timeit.default_timer()
 
-    while running:
-        try:
-            message = consumer.poll(timeout=1.0)
+    try:
+        while True:
+            # enforce timeout so we don't run forever
+            if timeit.default_timer() - MAX_POLL_TIME > start_time:
+                raise TimeoutError
 
-            if message is None: continue
+            message = consumer.poll(timeout=MAX_POLL_TIME)
 
-            if not message.error():
-                yield message.value().decode("utf-8")
+            if message is None: raise EOFError
+
+            if not message.error(): yield message.value().decode("utf-8")
 
             elif message.error().code() == KafkaError._PARTITION_EOF:
-                running = False
-                continue
-
+                raise EOFError
             # silently ignore other errors
-            else:
-                logger.debug(message.error())
+            else: logger.debug(message.error())
 
-            # terminate after 2 sec
-            # TODO: re-consider when to timeout
-            if timeit.default_timer() - 2 >= start_time:
-                running = False
+            # add delay
+            sleep(0.1)
 
-            # delay poll
-            sleep(0.2)
+    except Exception as error:
+        if not isinstance(error, TimeoutError) or not isinstance(error, EOFError): logger.debug(type(error))
 
-        except Exception as error:
-            logger.debug(error)
-            running = False
-
-    consumer.close()
+    finally:
+        consumer.close()
