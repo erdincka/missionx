@@ -1,3 +1,4 @@
+from glob import glob
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
@@ -8,18 +9,23 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
         [
             "/opt/mapr/spark/spark-3.3.3/jars/spark-sql-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
             "/opt/mapr/spark/spark-3.3.3/jars/kafka-clients-2.6.1.700-eep-921.jar",
+            "/opt/mapr/spark/spark-3.3.3/jars/kafka-eventstreams-2.6.1.700-eep-921.jar",
             "/opt/mapr/spark/spark-3.3.3/jars/spark-streaming-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
             "/opt/mapr/spark/spark-3.3.3/jars/spark-token-provider-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
+            "/opt/mapr/spark/spark-3.3.3/jars/protobuf-java-3.21.9.jar",
+            "/opt/mapr/lib/maprfs-7.6.1.0-mapr.jar",
+            "/opt/mapr/lib/mapr-streams-7.6.1.0-mapr.jar",
+            "/opt/mapr/lib/hadoop-common-3.3.5.200-eep-921.jar",
         ]
     )
 
     # Create Spark session
     spark = (
         SparkSession.builder.appName("KafkaStreaming")
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+        # .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+        # .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
         # .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.3.0-eep-921")
-        .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0")
+        # .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0")
         .config("spark.jars", spark_jars)
         .getOrCreate()
     )
@@ -29,6 +35,9 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
         "kafka.bootstrap.servers": f"{host}:9092",
         "subscribe": f"{stream}:{topic}",
         "startingOffsets": "earliest",
+        "group.id": "missionx",
+        "failOnDataLoss": False,
+        "maxOffsetsPerTrigger": 1000,
         "kafka.security.protocol": "SASL_PLAINTEXT",
         "kafka.sasl.mechanism": "PLAIN",
         "kafka.sasl.jaas.config": f"org.apache.kafka.common.security.plain.PlainLoginModule required username=\"{os.environ['MAPR_USER']}\" password=\"{os.environ['MAPR_PASS']}\";"
@@ -52,9 +61,8 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
     .readStream \
     .format("kafka") \
     .options(**kafka_params) \
-    .option("failOnDataLoss", "false") \
     .load() \
-    # .selectExpr("CAST(value AS STRING)") \
+    .selectExpr("CAST(value AS STRING)") \
     # .selectExpr("SPLIT(value, ',') AS data") \
     # .selectExpr(
     #     "data[0] AS _id",
