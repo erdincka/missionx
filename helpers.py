@@ -15,12 +15,12 @@ DEMO = {
 HQ_VOLUME_NAME = "missionX"
 HQ_VOLUME_PATH = "/apps/missionX"
 
-EDGE_VOLUME_PATH = "/apps/edge-missionX"
-EDGE_VOLUME_NAME = "edge-missionX"
+EDGE_VOLUME_PATH = "/apps/edge_missionX"
+EDGE_VOLUME_NAME = "edge_missionX"
 
 STREAM_LOCAL = "pipelineStream"
 HQ_STREAM_REPLICATED = "replicatedStream"
-EDGE_STREAM_REPLICATED = "edge-replicatedStream"
+EDGE_STREAM_REPLICATED = "edge_replicatedStream"
 
 HQ_IMAGETABLE = "imagesTable"
 TOPIC_NASAFEED = "NASAFEED"
@@ -31,15 +31,16 @@ TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
 NASA_FEED_FILE = "meta/query_results_combined-USE.json"
 IMAGE_FILE_LOCATION = "downloadedAssets"
 HQ_MISSION_FILES = "files"
-EDGE_MISSION_FILES = "edge-files"
+EDGE_MISSION_FILES = "edge_files"
 NASA_FEED_DELAY = 5
 IMAGE_DOWNLOAD_SERVICE_DELAY = 5
-IMAGE_DISPLAY_SERVICE_DELAY = 3
+ASSET_VIEWER_SERVICE_DELAY = 3
 ASSET_BROADCAST_DELAY = 3
 ASSET_REQUEST_DELAY = 3
 BROADCAST_LISTENER_DELAY = 3
 AUDIT_LISTENER_DELAY = 3
 ASSET_RESPONSE_DELAY = 2
+UPSTREAM_COMM_DELAY = 3
 
 # timeout stream consumers
 MAX_POLL_TIME = 2
@@ -52,7 +53,8 @@ SERVICES = {
         ("Asset Response", "compare_arrows"),
     ],
     "EDGE": [
-        ("Audit Listener", "cast"),
+        # ("Audit Listener", "cast"),
+        ("Upstream Comm", "cast"),
         ("Broadcast Listener", "hearing"),
         ("Asset Request", "compare_arrows"),
         ("Image Viewer", "photo_album"),

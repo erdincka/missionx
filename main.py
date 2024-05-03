@@ -3,13 +3,14 @@ import os
 import importlib_resources
 
 import requests
-from nicegui import app, ui, binding, run
+from nicegui import app, ui, binding
 import inspect
-from edge_services import asset_request_service, audit_listener_service, broadcast_listener_service
+from edge_services import asset_request_service, asset_viewer_service, broadcast_listener_service, make_asset_request, upstream_comm_service
 from functions import *
 
 from helpers import *
 from hq_services import asset_broadcast_service, asset_response_service, nasa_feed_service, image_download_service
+import steps
 
 logging.basicConfig(level=logging.INFO,
                 format="%(asctime)s:%(levelname)s:%(funcName)s: %(message)s",
@@ -42,27 +43,27 @@ async def home():
     app.storage.general["assetresponse_count"] = 0
     app.storage.general["broadcastlistener_count"] = 0
     app.storage.general["auditlistener_count"] = 0
+    app.storage.general["upstreamcomm_count"] = 0
+    app.storage.general["imageviewer_count"] = 0
 
     # and image lists
     app.storage.general["hqimages"] = []
     app.storage.general["edgeimages"] = []
 
+    # and connectivity status
+    app.storage.general["stream_replication"] = ""
+    app.storage.general["volume_replication"] = ""
+
     # Header
     with ui.header(elevated=True).style('background-color: #3874c8').classes('items-center justify-between uppercase'):
-        ui.label(APP_NAME)
+        ui.label(f"{APP_NAME}: {TITLE}")
         ui.space()
 
         ui.label("HQ Cluster:")
-        ui.label().bind_text_from(os.environ, "MAPR_CLUSTER")
-        ui.space()
-        ui.label("HQ Cluster IP:")
-        ui.label().bind_text_from(os.environ, "MAPR_IP")
+        ui.link(target=f"https://{os.environ['MAPR_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "MAPR_CLUSTER").classes("text-sky-300 hover:text-blue-600")
         ui.space()
         ui.label("Edge Cluster:")
-        ui.label().bind_text_from(os.environ, "EDGE_CLUSTER")
-        ui.space()
-        ui.label("Edge Cluster IP:")
-        ui.label().bind_text_from(os.environ, "EDGE_IP")
+        ui.link(target=f"https://{os.environ['EDGE_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "EDGE_CLUSTER").classes("text-sky-300 hover:text-blue-600")
         ui.space()
 
         # Status indicator
@@ -88,14 +89,24 @@ async def home():
 
     # Prepare
     with ui.expansion(
-        "Set up the demo environment", icon="engineering", caption="Prepare to run"
+        "Set up the demo environment", icon="engineering", caption="Prepare the cluster for the demo"
     ).classes("w-full text-bold") as setup_page:
 
-        ui.label("Create the volume, topics and tables to use with this demo.")
+        ui.label("Create the volumes, topics and tables at the HQ cluster.")
 
-        ui.code(inspect.getsource(prepare)).classes("w-full")
+        ui.code(inspect.getsource(prepare_core)).classes("w-full")
 
-        ui.button("Run", on_click=prepare).bind_enabled_from(
+        ui.button("Run", on_click=prepare_core).bind_enabled_from(
+            app.storage.user, "busy", lambda x: not x
+        )
+
+        ui.space()
+
+        ui.label("Create the volume at the Edge cluster.")
+
+        ui.code(inspect.getsource(prepare_edge)).classes("w-full")
+
+        ui.button("Run", on_click=prepare_edge).bind_enabled_from(
             app.storage.user, "busy", lambda x: not x
         )
 
@@ -116,21 +127,12 @@ async def home():
                     service_status(svc)
                     ui.space()
 
-            ui.label("HQ acts as the hub for information flow in this scenario. It is where the data is collected from various sources (which we simulate the ones coming from NASA), \
-                     processed and distributed to various targets, including the field teams working at the edge, as actionable intelligence. \
-                     Microservice status for Headquarters are shown above. \
-                     You can pause/resume them on clicking their icon. The numbers indicate the processed items for each service. \
-                     We are going to start and explain each service in the following steps.").classes("h-32")
+            ui.label(steps.INTRO).classes("h-32")
 
             with ui.stepper().classes("w-full h-96").props("contracted") as stepper:
                 with ui.step('Data Ingestion'):
                     ui.label("Data Ingestion").classes("text-bold")
-                    ui.label(
-                        "Let's start with generating sample data mocking RSS feed from NASA. \
-                        We are using pre-recorded images from 2014, but we can also get them in real-time using the relevant NASA API calls. \
-                        For each message we recieve, we will create a record in the JSON Table and \
-                        send a message to the pipeline to inform the next service, Image Download, so it can process the message content."
-                    )
+                    ui.label(steps.INGESTION)
 
                     with ui.expansion("Code", caption="Code to enable service", icon="code").classes("w-full"):
                         ui.code(inspect.getsource(extract_wrapped(nasa_feed_service))).classes(
@@ -152,10 +154,7 @@ async def home():
                 with ui.step('Data Processing (ETL)'):
                     ui.label("Data Processing (ETL)").classes("text-bold")
 
-                    ui.label(
-                        "With each message in the pipeline, we will get a link to download the asset. We will download this asset, \
-                        and save the image in a volume, while updating the location of the asset in the database."
-                    )
+                    ui.label(steps.ETL)
 
                     with ui.expansion("Code", caption="Code to enable service", icon="code").classes("w-full"):
                         ui.code(inspect.getsource(extract_wrapped(image_download_service))).classes(
@@ -249,12 +248,17 @@ async def home():
                 with ui.grid(columns=5).classes("p-1") as images:
                     ui.timer(0.5, lambda: imageshow(os.environ['MAPR_IP'], "hqimages"))
 
-            ui.space()
-
         # Edge Dashboard
         with splitter.after:
             # EDGE
-            ui.label("Edge Dashboard").classes("pl-2 text-bold")
+            with ui.row().classes("w-full"):
+                ui.label("Edge Dashboard").classes("pl-2 text-bold")
+                ui.space()
+                ui.label("Volume:")
+                ui.label().bind_text_from(app.storage.general, "volume_replication")
+                ui.space()
+                ui.label("Stream:")
+                ui.label().bind_text_from(app.storage.general, "stream_replication")
 
             with ui.row().classes("w-full place-items-center h-16"):
                 ui.label("Services").classes("p-2")
@@ -268,10 +272,37 @@ async def home():
                         All this communication happens bi-directionally in real-time with lightweight messaging service, Ezmeral Event Store.").classes("pl-2 h-32")
 
             with ui.stepper().classes("w-full h-96").props("contracted") as stepper:
-                with ui.step("Audit Listener"):
-                    ui.label("Audit Listener").classes("text-bold")
+                # with ui.step("Setup"):
+                #     ui.label("Setup").classes("text-bold")
+                #     ui.label(
+                #         "Set up edge cluster for HQ connection and data replication"
+                #     )
+
+                #     with ui.expansion(
+                #         "Code", caption="Code to enable service", icon="code"
+                #     ).classes("w-full"):
+                #         ui.code(
+                #             inspect.getsource(
+                #                 prepare_edge
+                #             )
+                #         ).classes("w-full")
+
+                #     ui.label("Click 'Run' to enable the service")
+
+                #     with ui.stepper_navigation():
+                #         ui.button(
+                #             "Run",
+                #             on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                #                 None, prepare_edge
+                #             ),
+                #         )
+                #         ui.button("Next", on_click=stepper.next, color="secondary")
+                #         # ui.button("Back", on_click=stepper.previous, color="none")
+
+                with ui.step("Upstream Comm"):
+                    ui.label("Upstream Comm").classes("text-bold")
                     ui.label(
-                        "We are monitoring the audit stream to know if upstream connectivity is established."
+                        "Monitor upstream connectivity and data replication status"
                     )
 
                     with ui.expansion(
@@ -279,7 +310,7 @@ async def home():
                     ).classes("w-full"):
                         ui.code(
                             inspect.getsource(
-                                extract_wrapped(audit_listener_service)
+                                extract_wrapped(upstream_comm_service)
                             )
                         ).classes("w-full")
 
@@ -289,7 +320,7 @@ async def home():
                         ui.button(
                             "Run",
                             on_click=lambda: asyncio.get_event_loop().run_in_executor(
-                                None, audit_listener_service
+                                None, upstream_comm_service
                             ),
                         )
                         ui.button("Next", on_click=stepper.next, color="secondary")
@@ -342,10 +373,36 @@ async def home():
                                 None, asset_request_service
                             ),
                         )
+                        ui.button("Next", on_click=stepper.next, color="secondary")
+                        ui.button('Back', on_click=stepper.previous, color="none")
+
+                with ui.step("Asset Viewer"):
+                    ui.label("Asset Viewer").classes("text-bold")
+                    ui.label(
+                        "We will periodically mirror the volume where the requested assets are copied."
+                    )
+
+                    with ui.expansion(
+                        "Code", caption="Code to enable service", icon="code"
+                    ).classes("w-full"):
+                        ui.code(
+                            inspect.getsource(extract_wrapped(asset_viewer_service))
+                        ).classes("w-full")
+
+                    ui.label("Click 'Run' to enable the service")
+
+                    with ui.stepper_navigation():
+                        ui.button(
+                            "Run",
+                            on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                                None, asset_viewer_service
+                            ),
+                        )
                         # ui.button("Next", on_click=stepper.next, color="secondary")
                         ui.button('Back', on_click=stepper.previous, color="none")
 
             # List the broadcasted messages
+            ui.label("Available Assets")
             with ui.scroll_area().classes("w-full h-48"):
                 assets = (
                     ui.table(

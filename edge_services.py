@@ -1,7 +1,13 @@
+import datetime
 import json
 import os
+from pprint import pprint
 import socket
+import time
 
+import requests
+
+from functions import run_command
 from helpers import *
 from nicegui import app
 from time import sleep
@@ -23,7 +29,6 @@ def audit_listener_service():
 
     app.storage.general["services"]["auditlistener"] = True
 
-    logger.setLevel(logging.DEBUG)
     logger.debug("started...")
 
     while True:
@@ -155,3 +160,111 @@ def asset_request_service():
 
         # add delay to publishing
         sleep(ASSET_REQUEST_DELAY)
+
+
+@fire_and_forget
+def upstream_comm_service():
+    app.storage.general["services"]["upstreamcomm"] = True
+
+    logger.debug("started...")
+
+    while True:
+        # skip if service is disabled by user
+        if not app.storage.general["services"].get("upstreamcomm", False):
+            logger.debug("sleeping...")
+            sleep(UPSTREAM_COMM_DELAY)
+            continue
+
+        logger.debug("running...")
+
+        try:
+            AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
+
+            # check volume replication
+            REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/volume/info?name={EDGE_MISSION_FILES}"
+            response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+            response.raise_for_status()
+
+            if response:
+                result = response.json()
+                logger.debug("volume info: %s", result)
+                lastUpdatedTime = (result["timestamp"] - result["data"][0]["lastSuccessfulMirrorTime"]) / 1000 # remove microseconds
+                app.storage.general["volume_replication"] = f"{str(datetime.timedelta(seconds=lastUpdatedTime)).split('.')[0]}s"
+
+            else:
+                logger.warning("Cannot get volume info")
+
+            # check stream replication
+            REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/list?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"
+            response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+            response.raise_for_status()
+
+            if response:
+                result = response.json()
+                logger.debug("stream info: %s", result)
+                if result['status'] == "ERROR":
+                    app.storage.general["stream_replication"] = "ERROR"
+                    # sanity check
+                    for error in result['errors']:
+                        if f"{EDGE_STREAM_REPLICATED} is not a valid stream" in error["desc"]:
+                            app.storage.general["stream_replication"] = "NO STREAM"
+                elif result['status'] == "OK":
+                    app.storage.general["stream_replication"] = "OK"
+                    # if result["data"][0].get('replicaState', "") == "REPLICA_STATE_REPLICATING":
+                    #     app.storage.general["stream_replication"] = "REPLICATING"
+                    if result["data"][0].get("paused", False) == True:
+                        # sleep(0.1)
+                        app.storage.general["stream_replication"] = "PAUSED"
+                    if result["data"][0].get("isUptodate", False) == True:
+                        # sleep(0.1)
+                        app.storage.general["stream_replication"] = "IN SYNC"
+
+            else:
+                logger.warning("Cannot get stream replica")
+
+
+        except Exception as error:
+            logger.debug(error)
+
+        # add delay to publishing
+        sleep(UPSTREAM_COMM_DELAY)
+
+
+# put the request into queue
+def make_asset_request(asset: dict):
+    if "requested_assets" not in app.storage.general.keys():
+        app.storage.general["requested_assets"] = []
+
+    # find and update the requested asset in the broadcast list (just for UI feedback)
+    for a in app.storage.general["edge_broadcastreceived"]:
+        if asset['assetID'] == a['assetID']:
+            a["status"] = "requesting..."
+
+    app.storage.general["requested_assets"].append(asset)
+
+
+
+@fire_and_forget
+def asset_viewer_service():
+    app.storage.general["services"]["assetviewer"] = True
+
+    logger.debug("started...")
+
+    while True:
+        # skip if service is disabled by user
+        if not app.storage.general["services"].get("assetviewer", False):
+            logger.debug("sleeping...")
+            sleep(ASSET_VIEWER_SERVICE_DELAY)
+            continue
+
+        logger.debug("running...")
+
+        try:
+            pass
+            # run_command(f"maprcli volume mirror start -cluster {os.environ['EDGE_CLUSTER']} -name {EDGE_MISSION_FILES}")
+
+        except Exception as error:
+            logger.debug(error)
+
+        # add delay to publishing
+        sleep(ASSET_VIEWER_SERVICE_DELAY)
