@@ -14,6 +14,7 @@ def produce(stream: str, topic: str, messages: list):
 
     try:
         for message in messages:
+            logger.debug("pushing message: %s", message)
             p.produce(topic, message.encode("utf-8"))
 
     except Exception as error:
@@ -24,6 +25,7 @@ def produce(stream: str, topic: str, messages: list):
         p.flush()
 
     return True
+
 
 def consume(stream: str, topic: str):
     from confluent_kafka import Consumer, KafkaError

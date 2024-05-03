@@ -59,6 +59,13 @@ async def prepare_edge():
 def toggle_service(prop: str):
     app.storage.general["services"][prop] = not app.storage.general["services"].get(prop, False)
 
+
+def toggle_debug(val: bool):
+    if val:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+
 # return buttons to show and control service status
 def service_status(service: tuple):
     name, icon = service
@@ -113,6 +120,10 @@ def stream_replica_setup():
     else:
         logger.warning("Cannot get stream replica")
 
+
+# Start volume mirror from edge
+async def mirror_volume():
+    await run.io_bound(run_command, f"maprcli volume mirror start -cluster {os.environ['EDGE_CLUSTER']} -name {EDGE_MISSION_FILES}")
 
 # Handle exceptions without UI failure
 def gracefully_fail(exc: Exception):
