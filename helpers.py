@@ -48,7 +48,7 @@ SERVICES = {
         ("Upstream Comm", 3),
         ("Broadcast Listener", 3),
         ("Asset Request", 3),
-        ("Image Viewer", 3),
+        ("Asset Viewer", 3),
     ],
 }
 

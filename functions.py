@@ -87,9 +87,9 @@ def service_counter(service: tuple):
     name, _ = service
     prop = name.lower().replace(" ", "")
 
-    with ui.item().bind_enabled_from(app.storage.general["services"], prop).classes("text-xs m-1 p-1 border"):
+    with ui.item().classes("text-xs m-1 p-1 border"):
         with ui.item_section():
-            ui.item_label(f"{name.split(' ')[1]} count").classes("no-wrap")
+            ui.item_label(f"{name.split(' ')[1]} processed").classes("no-wrap")
         with ui.item_section().props('side'):
             ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
 
@@ -98,7 +98,7 @@ def service_settings(service: tuple):
     name, _ = service
     prop = name.lower().replace(" ", "")
 
-    with ui.item().bind_enabled_from(app.storage.general["services"], prop).classes("text-xs m-1 p-1 border"):
+    with ui.item().classes("text-xs m-1 p-1 border"):
         with ui.item_section():
             ui.item_label(f"{name.split(' ')[1]} delay (s):").classes("no-wrap")
             slider = ui.slider(min=0, max=10).bind_value(app.storage.general, f"{prop}_delay")
