@@ -30,9 +30,8 @@ def audit_listener_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("auditlistener", False):
-            logger.debug("sleeping...")
-            sleep(AUDIT_LISTENER_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -64,7 +63,7 @@ def audit_listener_service():
             )
 
         # add delay to publishing
-        sleep(AUDIT_LISTENER_DELAY)
+        sleep(app.storage.general.get("auditlistener_delay", 1.0))
 
 
 @fire_and_forget
@@ -85,9 +84,8 @@ def broadcast_listener_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("broadcastlistener", False):
-            logger.debug("sleeping...")
-            sleep(BROADCAST_LISTENER_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -106,7 +104,7 @@ def broadcast_listener_service():
             logger.debug(error)
 
         # add delay to publishing
-        sleep(BROADCAST_LISTENER_DELAY)
+        sleep(app.storage.general.get("broadcastlistener_delay", 1.0))
 
 
 @fire_and_forget
@@ -126,9 +124,8 @@ def asset_request_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("assetrequest", False):
-            logger.debug("sleeping...")
-            sleep(ASSET_REQUEST_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -155,7 +152,7 @@ def asset_request_service():
             logger.debug(error)
 
         # add delay to publishing
-        sleep(ASSET_REQUEST_DELAY)
+        sleep(app.storage.general.get("assetrequest_delay", 1.0))
 
 
 @fire_and_forget
@@ -167,9 +164,8 @@ def upstream_comm_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("upstreamcomm", False):
-            logger.debug("sleeping...")
-            sleep(UPSTREAM_COMM_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -230,7 +226,7 @@ def upstream_comm_service():
             logger.warning("Cannot get stream replica")
 
         # add delay to publishing
-        sleep(UPSTREAM_COMM_DELAY)
+        sleep(app.storage.general.get("upstreamcomm_delay", 1.0))
 
 
 # put the request into queue
@@ -255,9 +251,8 @@ def asset_viewer_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("assetviewer", False):
-            logger.debug("sleeping...")
-            sleep(ASSET_VIEWER_SERVICE_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -268,4 +263,4 @@ def asset_viewer_service():
             logger.debug(error)
 
         # add delay to publishing
-        sleep(ASSET_VIEWER_SERVICE_DELAY)
+        sleep(app.storage.general.get("assetviewer_delay", 1.0))

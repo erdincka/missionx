@@ -7,200 +7,129 @@ from helpers import *
 
 def edge_page():
     # Edge Dashboard
-    with ui.row().classes("w-full"):
-        ui.label("Edge Dashboard").classes("text-bold")
-
-    with ui.row().classes("w-full place-items-center sticky top-28 bg-slate-100 dark:bg-slate-700 p-3"):
-        ui.label("Edge").classes("text-bold")
-
-        ui.label().bind_text_from(app.storage.general, "stream_replication")
+    with ui.row().classes("w-full no-wrap place-items-center"):
+        ui.label("Edge Dashboard").classes("text-bold ml-2")
+        ui.icon("info").tooltip("Edge services simulate an environment where intermittent connectivity and low-bandwidth data transfers are the norm. \
+            In such environments, we would like to minimize the data and the overhead, while keeping information relevant and intact. \
+            All this communication happens bi-directionally in real-time with lightweight messaging service, Ezmeral Event Store.")
 
         ui.space()
 
-        for svc in SERVICES["EDGE"]:
-            service_status(svc)
-            ui.space()
-
+        # Connectivity indicator
         with ui.row().classes("place-items-center"):
-            ui.button("Mirror", on_click=mirror_volume)
+            ui.label().bind_text_from(app.storage.general, "stream_replication")
+            ui.button("Mirror", on_click=mirror_volume).classes("py-0 min-h-0").props("flat")
             ui.label().bind_text_from(app.storage.general, "volume_replication")
 
-    ui.label("Edge services simulate an environment where intermittent connectivity and low-bandwidth data transfers are the norm. \
-                In such environments, we would like to minimize the data and the overhead, while keeping information relevant and intact. \
-                All this communication happens bi-directionally in real-time with lightweight messaging service, Ezmeral Event Store.")
+    with ui.row().classes("w-full no-wrap ml-2"):
+        # left panel
+        with ui.column().classes("w-fit"):
+            with ui.list().props('bordered separator').classes("text-xs w-full"):
+                ui.item_label('Data Feed and Services').props('header').classes('text-bold text-sm bg-primary')
+                for svc in SERVICES["EDGE"]:
+                    service_status(svc)
 
-    with ui.stepper().classes("w-full").props("vertical") as stepper:
-        # with ui.step("Setup"):
-        #     ui.label("Setup").classes("text-bold")
-        #     ui.label(
-        #         "Set up edge cluster for HQ connection and data replication"
-        #     )
+            with ui.list().props('bordered separator').classes("text-xs w-full"):
+                ui.item_label('System Metrics').props('header').classes('text-bold text-sm bg-primary')
+                for svc in SERVICES["EDGE"]:
+                    service_counter(svc)
 
-        #     with ui.expansion(
-        #         "Code", caption="Code to enable service", icon="code"
-        #     ).classes("w-full"):
-        #         ui.code(
-        #             inspect.getsource(
-        #                 prepare_edge
-        #             )
-        #         ).classes("w-full")
+            with ui.list().props('bordered separator').classes("text-xs w-full"):
+                ui.item_label('Control Panel').props('header').classes('text-bold text-sm bg-primary')
+                for svc in SERVICES["EDGE"]:
+                    service_settings(svc)
 
-        #     ui.label("Click 'Run' to enable the service")
 
-        #     with ui.stepper_navigation():
-        #         ui.button(
-        #             "Run",
-        #             on_click=lambda: asyncio.get_event_loop().run_in_executor(
-        #                 None, prepare_edge
-        #             ),
-        #         )
-        #         ui.button("Next", on_click=stepper.next, color="secondary")
-        #         # ui.button("Back", on_click=stepper.previous, color="none")
-
-        with ui.step("Upstream Comm"):
-            ui.label("Upstream Comm").classes("text-bold")
-            ui.label(
-                "Monitor upstream connectivity and data replication status"
-            )
-
-            with ui.expansion(
-                "Code", caption="Code to enable service", icon="code"
-            ).classes("w-full"):
-                ui.code(
-                    inspect.getsource(
-                        extract_wrapped(upstream_comm_service)
+        # right panel
+        with ui.column().classes("w-full"):
+            with ui.stepper().classes("w-full").props("vertical header-nav") as stepper:
+                with ui.step("Upstream Comm"):
+                    ui.label(
+                        "Monitor upstream connectivity and data replication status"
                     )
-                ).classes("w-full")
 
-            ui.label("Click 'Run' to enable the service")
+                    ui.label("Click 'Run' to enable the service")
 
-            with ui.stepper_navigation():
-                ui.button(
-                    "Run",
-                    on_click=lambda: asyncio.get_event_loop().run_in_executor(
-                        None, upstream_comm_service
-                    ),
-                )
-                ui.button("Next", on_click=stepper.next, color="secondary")
-                # ui.button("Back", on_click=stepper.previous, color="none")
+                    with ui.stepper_navigation():
+                        ui.button("Show code", on_click=lambda: show_code(extract_wrapped(upstream_comm_service))).props("outline")
+                        ui.button(
+                            "Run",
+                            on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                                None, upstream_comm_service
+                            ),
+                        )
+                        ui.button("Next", on_click=stepper.next, color="secondary")
+                        # ui.button("Back", on_click=stepper.previous, color="none")
 
-        with ui.step("Broadcast Listener"):
-            ui.label("Broadcast Listener").classes("text-bold")
-            ui.label(
-                "We will subscribe to the ASSET_BROADCAST topic so we can be notified of incoming new assets."
-            )
+                with ui.step("Broadcast Listener"):
+                    ui.label(
+                        "We will subscribe to the ASSET_BROADCAST topic so we can be notified of incoming new assets."
+                    )
 
-            with ui.expansion(
-                "Code", caption="Code to enable service", icon="code"
-            ).classes("w-full"):
-                ui.code(
-                    inspect.getsource(extract_wrapped(broadcast_listener_service))
-                ).classes("w-full")
+                    ui.label("Click 'Run' to enable the service")
 
-            ui.label("Click 'Run' to enable the service")
+                    with ui.stepper_navigation():
+                        ui.button("Show code", on_click=lambda: show_code(extract_wrapped(broadcast_listener_service))).props("outline")
+                        ui.button(
+                            "Run",
+                            on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                                None, broadcast_listener_service
+                            ),
+                        )
+                        ui.button("Next", on_click=stepper.next, color="secondary")
+                        ui.button('Back', on_click=stepper.previous, color="none")
 
-            with ui.stepper_navigation():
-                ui.button(
-                    "Run",
-                    on_click=lambda: asyncio.get_event_loop().run_in_executor(
-                        None, broadcast_listener_service
-                    ),
-                )
-                ui.button("Next", on_click=stepper.next, color="secondary")
-                ui.button('Back', on_click=stepper.previous, color="none")
+                with ui.step("Asset Request"):
+                    ui.label(
+                        "Any assets requested by clicking on the asset data will be put into ASSET_REQUEST topic, so HQ can process and send the asset through the replicated volume."
+                    )
 
-        with ui.step("Asset Request"):
-            ui.label("Asset Request").classes("text-bold")
-            ui.label(
-                "Any assets requested by clicking on the asset data will be put into ASSET_REQUEST topic, so HQ can process and send the asset through the replicated volume."
-            )
+                    ui.label("Click 'Run' to enable the service")
 
-            with ui.expansion(
-                "Code", caption="Code to enable service", icon="code"
-            ).classes("w-full"):
-                ui.code(
-                    inspect.getsource(extract_wrapped(asset_request_service))
-                ).classes("w-full")
+                    with ui.stepper_navigation():
+                        ui.button("Show code", on_click=lambda: show_code(extract_wrapped(asset_request_service))).props("outline")
+                        ui.button(
+                            "Run",
+                            on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                                None, asset_request_service
+                            ),
+                        )
+                        ui.button("Next", on_click=stepper.next, color="secondary")
+                        ui.button('Back', on_click=stepper.previous, color="none")
 
-            ui.label("Click 'Run' to enable the service")
+                with ui.step("Asset Viewer"):
+                    ui.label(
+                        "We will periodically mirror the volume where the requested assets are copied."
+                    )
 
-            with ui.stepper_navigation():
-                ui.button(
-                    "Run",
-                    on_click=lambda: asyncio.get_event_loop().run_in_executor(
-                        None, asset_request_service
-                    ),
-                )
-                ui.button("Next", on_click=stepper.next, color="secondary")
-                ui.button('Back', on_click=stepper.previous, color="none")
+                    ui.label("Click 'Run' to enable the service")
 
-        with ui.step("Asset Viewer"):
-            ui.label("Asset Viewer").classes("text-bold")
-            ui.label(
-                "We will periodically mirror the volume where the requested assets are copied."
-            )
+                    with ui.stepper_navigation():
+                        ui.button("Show code", on_click=lambda: show_code(extract_wrapped(asset_viewer_service))).props("outline")
+                        ui.button(
+                            "Run",
+                            on_click=lambda: asyncio.get_event_loop().run_in_executor(
+                                None, asset_viewer_service
+                            ),
+                        )
+                        # ui.button("Next", on_click=stepper.next, color="secondary")
+                        ui.button('Back', on_click=stepper.previous, color="none")
 
-            with ui.expansion(
-                "Code", caption="Code to enable service", icon="code"
-            ).classes("w-full"):
-                ui.code(
-                    inspect.getsource(extract_wrapped(asset_viewer_service))
-                ).classes("w-full")
+            # List the broadcasted messages
+            with ui.scroll_area().classes("w-full"):
+                with ui.list().props('dense').classes("text-xs w-full") as asset_list:
+                    ui.item_label('Real-time data feed').classes('text-bold text-sm')
+                    for asset in app.storage.general.get("edge_broadcastreceived", []):
+                        with ui.item(on_click=lambda e: print(e)).bind_enabled_from(app.storage.general["services"], "stream_replication").classes("text-xs"):
+                            with ui.item_section():
+                                ui.item_label(asset['title'])
+                            with ui.item_section().props('side'):
+                                ui.label().bind_text_from(asset, "status")
 
-            ui.label("Click 'Run' to enable the service")
-
-            with ui.stepper_navigation():
-                ui.button(
-                    "Run",
-                    on_click=lambda: asyncio.get_event_loop().run_in_executor(
-                        None, asset_viewer_service
-                    ),
-                )
-                # ui.button("Next", on_click=stepper.next, color="secondary")
-                ui.button('Back', on_click=stepper.previous, color="none")
-
-    # List the broadcasted messages
-    ui.label("Available Assets")
-    with ui.scroll_area().classes("w-full h-48"):
-        assets = (
-            ui.table(
-                columns=[
-                    # {
-                    #     "name": "assetID",
-                    #     "label": "Asset",
-                    #     "field": "assetID",
-                    #     "required": True,
-                    #     "align": "left",
-                    # },
-                    {
-                        "name": "title",
-                        "label": "Title",
-                        "field": "title",
-                        "required": True,
-                        "align": "left",
-                    },
-                    {
-                        "name": "status",
-                        "label": "Status",
-                        "field": "status",
-                    }
-                ],
-                rows=[],
-                row_key="assetID",
-                pagination=0,
-            )
-            .on("rowClick", lambda e: make_asset_request(e.args[1]))
-            .props("dense separator=None wrap-cells")
-            .classes("w-full")
-        )
-        ui.timer(
-            0.5,
-            lambda: assets.update_rows(
-                app.storage.general.get("edge_broadcastreceived", [])
-            ),
-        )
-    # The image display widget to show downloaded assets in real-time
-    with ui.scroll_area().classes("w-full h-64"):
-        with ui.grid(columns=6).classes("p-1") as images:
-            ui.timer(0.5, lambda: imageshow(os.environ['EDGE_IP'], "edgeimages"))
+                ui.timer(0.5, asset_list.update)
+            
+            # The image display widget to show downloaded assets in real-time
+            with ui.scroll_area().classes("w-full"):
+                with ui.grid(columns=6).classes("p-1") as images:
+                    ui.timer(0.5, lambda: imageshow(os.environ['EDGE_IP'], "edgeimages"))
 

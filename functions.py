@@ -1,3 +1,4 @@
+import inspect
 import logging
 import os
 import subprocess
@@ -43,6 +44,7 @@ async def prepare_core():
     await run.io_bound(run_command, f"maprcli volume create -name {HQ_MISSION_FILES} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH}/{HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     app.storage.user["busy"] = False
 
+
 async def prepare_edge():
     app.storage.user["busy"] = True
     # Edge resources
@@ -66,25 +68,42 @@ def toggle_debug(val: bool):
     else:
         logger.setLevel(logging.INFO)
 
-# return buttons to show and control service status
+
 def service_status(service: tuple):
-    name, icon = service
+    name, _ = service
     prop = name.lower().replace(" ", "")
 
     if prop not in app.storage.general["services"]:
         app.storage.general["services"][prop] = False
 
-    with ui.button(on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("round").bind_visibility_from(
-        app.storage.general["services"], prop
-    ).classes("size-auto"):
-        ui.icon(icon, size="md")
-        ui.badge().bind_text_from(app.storage.general, f"{prop}_count").props('floating')
+    with ui.item(on_click=lambda n=prop: toggle_service(n)).bind_enabled_from(app.storage.general["services"], prop).classes("text-xs m-1 p-1 border"):
+        with ui.item_section():
+            ui.item_label(name).classes("no-wrap")
+        with ui.item_section().props('side'):
+            ui.label().bind_text_from(app.storage.general["services"], prop, backward=lambda x: "Started" if x else "Stopped")
 
-    with ui.button(color="none", on_click=lambda n=prop: toggle_service(n)).tooltip(name).props("round").bind_visibility_from(
-        app.storage.general["services"], prop, backward=lambda x: not x
-    ).classes("size-auto"):
-        ui.icon(icon, size="md")
-        ui.badge().bind_text_from(app.storage.general, f"{prop}_count").props('floating')
+
+def service_counter(service: tuple):
+    name, _ = service
+    prop = name.lower().replace(" ", "")
+
+    with ui.item().bind_enabled_from(app.storage.general["services"], prop).classes("text-xs m-1 p-1 border"):
+        with ui.item_section():
+            ui.item_label(f"{name.split(' ')[1]} count").classes("no-wrap")
+        with ui.item_section().props('side'):
+            ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
+
+
+def service_settings(service: tuple):
+    name, _ = service
+    prop = name.lower().replace(" ", "")
+
+    with ui.item().bind_enabled_from(app.storage.general["services"], prop).classes("text-xs m-1 p-1 border"):
+        with ui.item_section():
+            ui.item_label(f"{name.split(' ')[1]} delay (s):").classes("no-wrap")
+            slider = ui.slider(min=0, max=10).bind_value(app.storage.general, f"{prop}_delay")
+        with ui.item_section().props('side'):
+            ui.label().bind_text_from(slider, 'value')
 
 
 # return image to display on UI
@@ -125,8 +144,17 @@ def stream_replica_setup():
 async def mirror_volume():
     await run.io_bound(run_command, f"maprcli volume mirror start -cluster {os.environ['EDGE_CLUSTER']} -name {EDGE_MISSION_FILES}")
 
+
 # Handle exceptions without UI failure
 def gracefully_fail(exc: Exception):
     print("gracefully failing...")
     logger.debug("Exception: %s", exc)
     app.storage.user["busy"] = False
+
+
+def show_code(func):
+    with ui.dialog().classes("max-w-full w-full") as show, ui.card().classes("grow"):
+        ui.code(inspect.getsource(func)).classes("max-w-full w-full text-wrap")
+
+    show.on("close", show.clear)
+    show.open()

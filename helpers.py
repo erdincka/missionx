@@ -15,12 +15,12 @@ DEMO = {
 HQ_VOLUME_NAME = "missionX"
 HQ_VOLUME_PATH = "/apps/missionX"
 
-EDGE_VOLUME_PATH = "/apps/edge_missionX"
-EDGE_VOLUME_NAME = "edge_missionX"
+EDGE_VOLUME_NAME = "missionX.mirror"
+EDGE_VOLUME_PATH = "/apps/missionX.mirror"
 
 STREAM_LOCAL = "pipelineStream"
 HQ_STREAM_REPLICATED = "replicatedStream"
-EDGE_STREAM_REPLICATED = "edge_replicatedStream"
+EDGE_STREAM_REPLICATED = "replicatedStream.replica"
 
 HQ_IMAGETABLE = "imagesTable"
 TOPIC_NASAFEED = "NASAFEED"
@@ -31,33 +31,24 @@ TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
 NASA_FEED_FILE = "meta/query_results_combined-USE.json"
 IMAGE_FILE_LOCATION = "downloadedAssets"
 HQ_MISSION_FILES = "files"
-EDGE_MISSION_FILES = "edge_files"
-NASA_FEED_DELAY = 5
-IMAGE_DOWNLOAD_SERVICE_DELAY = 5
-ASSET_VIEWER_SERVICE_DELAY = 3
-ASSET_BROADCAST_DELAY = 3
-ASSET_REQUEST_DELAY = 3
-BROADCAST_LISTENER_DELAY = 3
-AUDIT_LISTENER_DELAY = 3
-ASSET_RESPONSE_DELAY = 2
-UPSTREAM_COMM_DELAY = 3
+EDGE_MISSION_FILES = "files.mirror"
 
 # timeout stream consumers
 MAX_POLL_TIME = 2
 
+# service name & processing delay in tuple
 SERVICES = {
     "HQ": [
-        ("NASA Feed", "rss_feed"),
-        ("Image Download", "photo"),
-        ("Asset Broadcast", "cell_tower"),
-        ("Asset Response", "compare_arrows"),
+        ("NASA Feed", 5),
+        ("Image Download", 5),
+        ("Asset Broadcast", 3),
+        ("Asset Response", 2),
     ],
     "EDGE": [
-        # ("Audit Listener", "cast"),
-        ("Upstream Comm", "cast"),
-        ("Broadcast Listener", "hearing"),
-        ("Asset Request", "compare_arrows"),
-        ("Image Viewer", "photo_album"),
+        ("Upstream Comm", 3),
+        ("Broadcast Listener", 3),
+        ("Asset Request", 3),
+        ("Image Viewer", 3),
     ],
 }
 

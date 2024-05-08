@@ -34,16 +34,22 @@ async def home():
     # Reset previous run state if it was hang
     app.storage.user["busy"] = False
 
-    # and ui counters
-    app.storage.general["nasafeed_count"] = 0
-    app.storage.general["imagedownload_count"] = 0
-    app.storage.general["assetbroadcast_count"] = 0
-    app.storage.general["assetrequest_count"] = 0
-    app.storage.general["assetresponse_count"] = 0
-    app.storage.general["broadcastlistener_count"] = 0
-    app.storage.general["auditlistener_count"] = 0
-    app.storage.general["upstreamcomm_count"] = 0
-    app.storage.general["imageviewer_count"] = 0
+    # and ui counters & settings
+    for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
+        name, delay = svc
+        prop = name.lower().replace(' ', '')
+        app.storage.general[f"{prop}_count"] = 0
+        app.storage.general[f"{prop}_delay"] = delay
+    
+    # app.storage.general["nasafeed_count"] = 0
+    # app.storage.general["imagedownload_count"] = 0
+    # app.storage.general["assetbroadcast_count"] = 0
+    # app.storage.general["assetrequest_count"] = 0
+    # app.storage.general["assetresponse_count"] = 0
+    # app.storage.general["broadcastlistener_count"] = 0
+    # app.storage.general["auditlistener_count"] = 0
+    # app.storage.general["upstreamcomm_count"] = 0
+    # app.storage.general["imageviewer_count"] = 0
 
     # and image lists
     app.storage.general["hqimages"] = []
@@ -112,11 +118,11 @@ async def home():
 
     ui.separator()
 
-    hq_page()
-
-    ui.separator()
-
-    edge_page()
+    with ui.splitter(limits=(25,75)) as site_panels:
+        with site_panels.before:
+            hq_page()
+        with site_panels.after:
+            edge_page()
 
     ui.separator()
 

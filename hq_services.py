@@ -46,9 +46,8 @@ def nasa_feed_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("nasafeed", False):
-            logger.debug("sleeping...")
-            sleep(NASA_FEED_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
         count = random.randrange(5)
@@ -89,7 +88,7 @@ def nasa_feed_service():
             sleep(random.random())
 
         # add delay to publishing
-        sleep(NASA_FEED_DELAY)
+        sleep(app.storage.general.get("nasafeed_delay", 1.0))
 
 
 @fire_and_forget
@@ -111,9 +110,8 @@ def image_download_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("imagedownload", False):
-            logger.debug("sleeping...")
-            sleep(IMAGE_DOWNLOAD_SERVICE_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
         downloaded = 0
@@ -184,7 +182,7 @@ def image_download_service():
         logger.debug("Image download service -> OK: %d, FAIL: %d", downloaded, failed)
 
         # add delay to publishing
-        sleep(IMAGE_DOWNLOAD_SERVICE_DELAY)
+        sleep(app.storage.general.get("imagedownload_delay", 1.0))
 
 
 @fire_and_forget
@@ -205,9 +203,8 @@ def asset_broadcast_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("assetbroadcast", False):
-            logger.debug("sleeping...")
-            sleep(ASSET_BROADCAST_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -239,7 +236,7 @@ def asset_broadcast_service():
                 )
 
         # add delay to publishing
-        sleep(ASSET_BROADCAST_DELAY)
+        sleep(app.storage.general.get("assetbroadcast_delay", 1.0))
 
 
 @fire_and_forget
@@ -259,9 +256,8 @@ def asset_response_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("assetresponse", False):
-            logger.debug("sleeping...")
-            sleep(ASSET_RESPONSE_DELAY)
-            continue
+            logger.debug("disabled")
+            break
 
         logger.debug("running...")
 
@@ -288,4 +284,4 @@ def asset_response_service():
                 )
 
         # add delay to publishing
-        sleep(ASSET_RESPONSE_DELAY)
+        sleep(app.storage.general.get("assetresponse_delay", 1.0))
