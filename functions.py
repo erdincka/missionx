@@ -33,11 +33,7 @@ def run_command(cmd):
 async def prepare_core():
     app.storage.user["busy"] = True
     # HQ resources
-    # await run.io_bound(run_command, f"maprcli audit data -cluster {os.environ['MAPR_CLUSTER']} -enabled true -retention 1")
-    # await run.io_bound(run_command, f"maprcli config save -cluster {os.environ['MAPR_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
     await run.io_bound(run_command, f"maprcli volume create -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    # await run.io_bound(run_command, f"maprcli volume audit -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
-    # await run.io_bound(run_command, f"hadoop mfs -setaudit on {HQ_VOLUME_PATH}")
     await run.io_bound(run_command, f"maprcli table create -path {HQ_VOLUME_PATH}/{HQ_IMAGETABLE} -tabletype json")
     await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_LOCAL} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
     await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
@@ -50,10 +46,7 @@ async def prepare_edge():
     # Edge resources
     await run.io_bound(run_command, f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
     await run.io_bound(run_command, f"echo {os.environ['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {os.environ['MAPR_USER']}")
-    # await run.io_bound(run_command, f"maprcli audit data -cluster {os.environ['EDGE_CLUSTER']} -enabled true -retention 1")
-    # await run.io_bound(run_command, f"maprcli config save -cluster {os.environ['EDGE_CLUSTER']} -values \"{{ 'mfs.enable.audit.as.stream':'1' }}\" ")
     await run.io_bound(run_command, f"maprcli volume create -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    # await run.io_bound(run_command, f"maprcli volume audit -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -dataauditops '+create,+delete,+tablecreate,-all' -forceenable true -enabled true")
     await run.io_bound(run_command, f"maprcli volume create -type mirror -name {EDGE_MISSION_FILES} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{os.environ['MAPR_CLUSTER']} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     app.storage.user["busy"] = False
 

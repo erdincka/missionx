@@ -13,9 +13,9 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
             "/opt/mapr/spark/spark-3.3.3/jars/spark-streaming-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
             "/opt/mapr/spark/spark-3.3.3/jars/spark-token-provider-kafka-0-10_2.12-3.3.3.0-eep-921.jar",
             "/opt/mapr/spark/spark-3.3.3/jars/protobuf-java-3.21.9.jar",
-            "/opt/mapr/lib/maprfs-7.6.1.0-mapr.jar",
-            "/opt/mapr/lib/mapr-streams-7.6.1.0-mapr.jar",
-            "/opt/mapr/lib/hadoop-common-3.3.5.200-eep-921.jar",
+            "/opt/mapr/lib/maprfs-7.7.0.0-mapr.jar",
+            "/opt/mapr/lib/mapr-streams-7.7.0.0-mapr.jar",
+            "/opt/mapr/lib/hadoop-common-3.3.5.300-eep-922.jar",
         ]
     )
 
@@ -111,6 +111,6 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
 
 
 if __name__ == "__main__":
-    for a in spark_kafka_consumer("10.1.1.32", "/apps/edge-missionX/edge-replicatedStream", "ASSET_BROADCAST"):
-        # print(a)
-        pass
+    for a in spark_kafka_consumer("10.1.1.31", "/apps/missionX/replicatedStream", "ASSET_BROADCAST"):
+        print(a)
+        # pass

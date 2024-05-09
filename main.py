@@ -65,10 +65,10 @@ async def home():
         ui.space()
 
         ui.label("HQ Cluster:")
-        ui.link(target=f"https://{os.environ['MAPR_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "MAPR_CLUSTER").classes("text-sky-300 hover:text-blue-600")
+        ui.link(target=f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{os.environ['MAPR_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "MAPR_CLUSTER").classes("text-sky-300 hover:text-blue-600")
         ui.space()
         ui.label("Edge Cluster:")
-        ui.link(target=f"https://{os.environ['EDGE_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "EDGE_CLUSTER").classes("text-sky-300 hover:text-blue-600")
+        ui.link(target=f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{os.environ['EDGE_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "EDGE_CLUSTER").classes("text-sky-300 hover:text-blue-600")
         ui.space()
 
         # Status indicator
