@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 from types import FunctionType
+from attr import dataclass
 from nicegui import ui
 
 APP_NAME = "missionX"
@@ -24,7 +25,7 @@ EDGE_STREAM_REPLICATED = "replicatedStream.replica"
 
 HQ_IMAGETABLE = "imagesTable"
 TOPIC_NASAFEED = "NASAFEED"
-TOPIC_IMAGE_DOWNLOADED = "IMAGE_DOWNLOADED"
+TOPIC_IMAGE_DOWNLOAD = "IMAGE_DOWNLOAD"
 TOPIC_ASSET_BROADCAST = "ASSET_BROADCAST"
 TOPIC_ASSET_REQUEST = "ASSET_REQUEST"
 TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
@@ -34,14 +35,14 @@ HQ_MISSION_FILES = "files"
 EDGE_MISSION_FILES = "files.mirror"
 
 # timeout stream consumers
-MAX_POLL_TIME = 2
+MAX_POLL_TIME = 5
 
 # service name & processing delay in tuple
 SERVICES = {
     "HQ": [
         ("NASA Feed", 5),
-        ("Image Download", 5),
-        ("Asset Broadcast", 3),
+        ("Image Download", 2),
+        ("Asset Broadcast", 2),
         ("Asset Response", 2),
     ],
     "EDGE": [
@@ -51,6 +52,7 @@ SERVICES = {
         ("Asset Viewer", 3),
     ],
 }
+
 
 # wrapper to make sync calls async-like
 def fire_and_forget(f):

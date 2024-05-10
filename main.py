@@ -41,19 +41,9 @@ async def home():
         app.storage.general[f"{prop}_count"] = 0
         app.storage.general[f"{prop}_delay"] = delay
     
-    # app.storage.general["nasafeed_count"] = 0
-    # app.storage.general["imagedownload_count"] = 0
-    # app.storage.general["assetbroadcast_count"] = 0
-    # app.storage.general["assetrequest_count"] = 0
-    # app.storage.general["assetresponse_count"] = 0
-    # app.storage.general["broadcastlistener_count"] = 0
-    # app.storage.general["auditlistener_count"] = 0
-    # app.storage.general["upstreamcomm_count"] = 0
-    # app.storage.general["imageviewer_count"] = 0
-
     # and image lists
-    app.storage.general["hqimages"] = []
-    app.storage.general["edgeimages"] = []
+    app.storage.general["dashboard_hq"] = []
+    app.storage.general["dashboard_edge"] = []
 
     # and connectivity status
     app.storage.general["stream_replication"] = ""

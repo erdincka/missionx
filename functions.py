@@ -1,6 +1,7 @@
 import inspect
 import logging
 import os
+import random
 import subprocess
 import textwrap
 from nicegui import app, run
@@ -13,7 +14,7 @@ def run_command(cmd):
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
         if result.returncode == 0:
-            logger.info("# %s ==> OK", cmd)
+            logger.debug("# %s ==> OK", cmd)
         else:
             logger.warning("# %s ==> %s", cmd, result.stdout)
             logger.debug(result.stderr)
@@ -29,6 +30,36 @@ def run_command(cmd):
     except Exception as error:
         logger.warning(error)
 
+
+def get_command_output(cmd):
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
+        if result.returncode == 0:
+            logger.debug("# %s ==> OK", cmd)
+        else:
+            logger.warning("# %s ==> %s", cmd, result.stdout)
+            logger.debug(result.stderr)
+
+        if result.stdout != "":
+            return result.stdout
+        if result.stderr != "":
+            if "Failed to connect to IPv6" not in result.stderr:
+                logger.debug(result)
+            else:
+                logger.debug("ignoring IPv6 errors...")
+
+    except Exception as error:
+        logger.warning(error)
+
+
+# def switch_cluster_to(dest: str):
+#     """
+#     Bring the selected cluster to the first line in /opt/mapr/conf/mapr-clusters.conf, so hadoop and streams commands will use that cluster.
+#     This is a dirty hack to overcome the lack of cluster selection of certain APIs.
+#     """
+
+#     command= f"""selected=$(grep {dest} /opt/mapr/conf/mapr-clusters.conf); others=$(grep -v {dest} /opt/mapr/conf/mapr-clusters.conf); echo "$selected\n$others" > /opt/mapr/conf/mapr-clusters.conf"""
+#     run_command(command)
 
 async def prepare_core():
     app.storage.user["busy"] = True
@@ -94,37 +125,67 @@ def service_settings(service: tuple):
     with ui.item().classes("text-xs m-1 p-1 border"):
         with ui.item_section():
             ui.item_label(f"{name.split(' ')[1]} delay (s):").classes("no-wrap")
-            slider = ui.slider(min=0, max=10).bind_value(app.storage.general, f"{prop}_delay")
+            slider = ui.slider(min=2, max=10).bind_value(app.storage.general, f"{prop}_delay")
         with ui.item_section().props('side'):
             ui.label().bind_text_from(slider, 'value')
 
 
 # return image to display on UI
-def imageshow(host: str, src: str):
-    # TODO: delete old images
-    if src in app.storage.general and len(app.storage.general[src]) > 0:
-        title, location = app.storage.general[src].pop(0)
-        # TODO: use /mapr mount
-        img_url = f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{location}"
-        with ui.card().tooltip(title).classes("h-48") as img:
-            ui.image(img_url)
-            ui.space()
-            with ui.card_section().classes("align-text-bottom text-sm"):
-                ui.label(textwrap.shorten(title, 24))
+def dashboard_tiles(host: str, source: str):
+    """
+    host: 
+    source: string of key in app.storage.general, hq_dashboard | edge_dashboard, contains: list[DashboardTile]
+    """
 
+    BGCOLORS = {
+        "NASA Feed Service": "bg-slate-300",
+        "Image Download Service": "bg-red-300",
+        "Asset Broadcast Service": "bg-green-300",
+        "Asset Response Service": "bg-orange-300",
+        "Upstream Comm Service": "bg-amber-300",
+        "Broadcast Listener Service": "bg-emerald-300",
+        "Asset Request Service": "bg-lime-300",
+        "Asset Viewer Service": "bg-stone-300",
+        # "bg-teal-300",
+        # "bg-sky-300",
+    }
+
+    if source in app.storage.general and len(app.storage.general[source]) > 0:
+        service, title, description, imageUrl = app.storage.general[source].pop(0)
+
+        with ui.card().classes("h-80").props("bordered") as img:
+            # lazily assign a random bg color
+            with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
+                ui.label(service)
+            if imageUrl is not None: # we have an image to show
+                # TODO: use /mapr mount
+                ui.image(f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{imageUrl}")
+            else:
+                with ui.card_section().classes("text-sm"):
+                    ui.label(textwrap.shorten(description, 64))
+            ui.space()
+            with ui.card_section().classes("text-sm"):
+                ui.label(textwrap.shorten(title, 40))
+        ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
         return img
 
 
 # create replica stream from HQ to Edge
-def stream_replica_setup():
+async def stream_replica_setup():
     source_stream_path = f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
     target_stream_path = f"{EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"
 
+    logger.debug("Starting replication to %s", target_stream_path)
     REST_URL = f"https://{os.environ['MAPR_IP']}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{os.environ['EDGE_CLUSTER']}{target_stream_path}&multimaster=true"
     AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
 
-    response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
-    response.raise_for_status()
+    logger.debug("REST_URL: %s", REST_URL)
+    try:
+        response = await run.io_bound(requests.get, url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+        response.raise_for_status()
+
+    except Exception as error:
+        logger.warning(error)
 
     if response:
         obj = response.json()

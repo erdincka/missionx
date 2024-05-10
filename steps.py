@@ -46,12 +46,12 @@ and save the image in a volume, while updating the location of the asset in the 
             "code": extract_wrapped(asset_response_service),
             "function": asset_response_service,
         },
-        {
-            "title": "Enable stream replication",
-            "description": "We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.",
-            "code": stream_replica_setup,
-            "function": stream_replica_setup,
-        },
+        # {
+        #     "title": "Enable stream replication",
+        #     "description": "We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.",
+        #     "code": stream_replica_setup,
+        #     "function": stream_replica_setup,
+        # },
     ],
     "EDGE": [
         {

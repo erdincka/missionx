@@ -50,7 +50,7 @@ def nasa_feed_service():
             break
 
         logger.debug("running...")
-        count = random.randrange(5)
+        count = random.randrange(5) + 1
 
         # pick "count" random items
         for item in random.sample(items, count):
@@ -75,11 +75,14 @@ def nasa_feed_service():
                 "assetID": item["_id"],
                 "messageCreatorID": "ezshow",
             }
-
-            if produce(stream_path, TOPIC_NASAFEED, [json.dumps(message)]):
+            if produce(cluster=os.environ['MAPR_CLUSTER'], stream=stream_path, topic=TOPIC_NASAFEED, record=json.dumps(message)):
                 logger.info("Published image received event to %s", output_topic_name)
                 # notify ui that we have new message
                 app.storage.general["nasafeed_count"] = app.storage.general.get("nasafeed_count", 0) + 1
+                # and update dashboard tiles with new message
+                app.storage.general["dashboard_hq"].append(
+                    tuple(["NASA Feed Service", f"Asset ID: {message['assetID']}", "New asset available from NASA", None])
+                )
 
             else:
                 logger.warning("Publish failed for assetID %s", message['assetID'])
@@ -102,7 +105,7 @@ def image_download_service():
     table_path = f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"
 
     input_topic = TOPIC_NASAFEED
-    output_topic = TOPIC_IMAGE_DOWNLOADED
+    output_topic = TOPIC_IMAGE_DOWNLOAD
 
     app.storage.general["services"]["imagedownload"] = True
     logger.debug("started...")
@@ -117,9 +120,9 @@ def image_download_service():
         downloaded = 0
         failed = 0
 
-        for msg in consume(stream=stream_path, topic=input_topic):
+        for msg in consume(cluster=os.environ["MAPR_CLUSTER"], stream=stream_path, topic=input_topic):
             try:
-                record = json.loads(msg)
+                record: dict = json.loads(msg)
                 logger.debug("Received: %s", record)
 
                 doc = find_document_by_id(host=os.environ["MAPR_IP"], table=table_path, docid=record["assetID"])
@@ -139,6 +142,7 @@ def image_download_service():
                     newMessage = {
                         "title": doc["data"][0]["title"],
                         # "description": doc["data"][0]["description"],
+                        "filename": imageFilename,
                         "assetID": doc["_id"],
                     }
 
@@ -168,11 +172,14 @@ def image_download_service():
                             failed += 1
 
                         # Publish image saved message to output stream
-                        if produce(stream=stream_path, topic=output_topic, messages=[json.dumps(newMessage)]):
+                        if produce(cluster=os.environ['MAPR_CLUSTER'], stream=stream_path, topic=output_topic, record=json.dumps(newMessage)):
                             logger.debug("Published image download event to %s", f"{stream_path}:{output_topic}")
                             # notify ui that we have new message
                             app.storage.general["imagedownload_count"] = app.storage.general.get("imagedownload_count", 0) + 1
-                            app.storage.general["hqimages"].append(tuple([doc['data'][0]['title'], doc["imageDownloadLocation"]]))
+                            # update dashboard with a tile
+                            app.storage.general["dashboard_hq"].append(
+                                tuple(["Image Download Service", doc['data'][0]['title'], doc['data'][0]['description'], doc["imageDownloadLocation"]])
+                            )
                         else:
                             logger.warning("Publish to %s failed for %s", f"{stream_path}:{output_topic}", newMessage)
 
@@ -194,7 +201,7 @@ def asset_broadcast_service():
     local_stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
     replicated_stream_path = f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
 
-    input_topic = TOPIC_IMAGE_DOWNLOADED
+    input_topic = TOPIC_IMAGE_DOWNLOAD
     output_topic = TOPIC_ASSET_BROADCAST
 
     app.storage.general["services"]["assetbroadcast"] = True
@@ -208,32 +215,45 @@ def asset_broadcast_service():
 
         logger.debug("running...")
 
-        for msg in consume(stream=local_stream_path, topic=input_topic):
+        for msg in consume(cluster=os.environ["MAPR_CLUSTER"], stream=local_stream_path, topic=input_topic):
             record = json.loads(msg)
             logger.debug("Received: %s", record)
 
             # skip assets that failed to download
-            if msg["status"] == "failed":
+            if record["status"] == "failed":
+                logger.warning("Record has failed, not publishing: %s", record["status"])
                 continue
 
-            # update message status
-            msg["status"] = "broadcast"
+            logger.debug("Record ready to publish: %s", type(record))
+            try:
+                # Publish to output topic on the replicated stream
+                if produce(
+                    cluster=os.environ['MAPR_CLUSTER'], stream=replicated_stream_path, topic=output_topic, record=json.dumps(record)
+                ):
+                    # update message status
+                    record["status"] = "broadcast"
 
-            # Publish to output topic on the replicated stream
-            if produce(
-                stream=replicated_stream_path, topic=output_topic, messages=[msg]
-            ):
-                logger.info(
-                    "Published asset to %s", f"{replicated_stream_path}:{output_topic}"
-                )
-                # notify ui that we have new message
-                app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
-            else:
-                logger.warning(
-                    "Publish to %s failed for %s",
-                    f"{replicated_stream_path}:{output_topic}",
-                    record,
-                )
+                    logger.info(
+                        "Published asset to %s", f"{replicated_stream_path}:{output_topic}"
+                    )
+                    # notify ui that we have new message
+                    app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
+                    # update dashboard with a tile
+                    app.storage.general["dashboard_hq"].append(
+                        tuple(["Asset Broadcast Service", f"Broadcasting new asset, {record['assetID']}", record['title'], None])
+                    )
+                else:
+                    # update message status
+                    record["status"] = "failed"
+
+                    logger.warning(
+                        "Publish to %s failed for %s",
+                        f"{replicated_stream_path}:{output_topic}",
+                        record,
+                    )
+
+            except Exception as error:
+                logger.warning(error)
 
         # add delay to publishing
         sleep(app.storage.general.get("assetbroadcast_delay", 1.0))
@@ -261,7 +281,7 @@ def asset_response_service():
 
         logger.debug("running...")
 
-        for msg in consume(stream=stream_path, topic=input_topic):
+        for msg in consume(cluster=os.environ["MAPR_CLUSTER"], stream=stream_path, topic=input_topic):
             record = json.loads(msg)
             logger.info("Responding to asset request for: %s", record['title'])
 
@@ -273,6 +293,8 @@ def asset_response_service():
 
             else:
                 logger.info("Copying asset from %s", doc["imageDownloadLocation"])
+                # FIX: workaround to select the correct cluster
+                # switch_cluster_to(os.environ['MAPR_CLUSTER'])
                 # copy file to replicated volume
                 run_command(
                     f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_VOLUME_PATH}/{HQ_MISSION_FILES}"
@@ -281,6 +303,10 @@ def asset_response_service():
                 # notify ui that we have new message
                 app.storage.general["assetresponse_count"] = (
                     app.storage.general.get("assetresponse_count", 0) + 1
+                )
+                # update dashboard with a tile
+                app.storage.general["dashboard_hq"].append(
+                    tuple(["Asset Response Service", f"Processing request: {record['assetID']}", record['title'], None])
                 )
 
         # add delay to publishing

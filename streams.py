@@ -7,15 +7,16 @@ from helpers import MAX_POLL_TIME
 
 logger = logging.getLogger()
 
-def produce(stream: str, topic: str, messages: list):
+def produce(cluster: str, stream: str, topic: str, record: str):
     from confluent_kafka import Producer
 
     p = Producer({"streams.producer.default.stream": stream})
 
     try:
-        for message in messages:
-            logger.debug("pushing message: %s", message)
-            p.produce(topic, message.encode("utf-8"))
+        # FIX: workaround to select correct cluster to produce
+        # switch_cluster_to(cluster)
+        logger.debug("pushing message: %s", record)
+        p.produce(topic, record.encode("utf-8"))
 
     except Exception as error:
         logger.warning(error)
@@ -27,8 +28,11 @@ def produce(stream: str, topic: str, messages: list):
     return True
 
 
-def consume(stream: str, topic: str):
+def consume(cluster: str, stream: str, topic: str):
     from confluent_kafka import Consumer, KafkaError
+
+    # FIX: workaround to select correct cluster to consume
+    # switch_cluster_to(cluster)
 
     consumer = Consumer(
         {"group.id": "ezshow", "default.topic.config": {"auto.offset.reset": "earliest"}}
@@ -36,7 +40,7 @@ def consume(stream: str, topic: str):
 
     consumer.subscribe([f"{stream}:{topic}"])
 
-    logger.debug("polling %s", topic)
+    # logger.debug("polling %s", topic)
     start_time = timeit.default_timer()
 
     try:
@@ -47,7 +51,7 @@ def consume(stream: str, topic: str):
 
             message = consumer.poll(timeout=MAX_POLL_TIME)
 
-            if message is None: raise EOFError
+            if message is None: continue
 
             if not message.error(): yield message.value().decode("utf-8")
 
@@ -60,7 +64,7 @@ def consume(stream: str, topic: str):
             sleep(0.1)
 
     except Exception as error:
-        if not isinstance(error, TimeoutError) or not isinstance(error, EOFError): logger.debug(type(error))
+        logger.debug(error)
 
     finally:
         consumer.close()

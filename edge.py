@@ -1,6 +1,5 @@
 from nicegui import app, ui
-import inspect
-from edge_services import asset_request_service, asset_viewer_service, broadcast_listener_service, make_asset_request, upstream_comm_service
+from edge_services import make_asset_request
 from functions import *
 
 from helpers import *
@@ -59,20 +58,47 @@ def edge_page():
                             ui.button('Back', on_click=stepper.previous, color="none")
 
             # List the broadcasted messages
-            with ui.scroll_area().classes("w-full"):
-                with ui.list().props('dense').classes("text-xs w-full") as asset_list:
-                    ui.item_label('Real-time data feed').classes('text-bold text-sm')
-                    for asset in app.storage.general.get("edge_broadcastreceived", []):
-                        with ui.item(on_click=lambda e: print(e)).bind_enabled_from(app.storage.general["services"], "stream_replication").classes("text-xs"):
-                            with ui.item_section():
-                                ui.item_label(asset['title'])
-                            with ui.item_section().props('side'):
-                                ui.label().bind_text_from(asset, "status")
+            ui.label("Available Assets")
+            assets = (
+                ui.table(
+                    columns=[
+                        # {
+                        #     "name": "assetID",
+                        #     "label": "Asset",
+                        #     "field": "assetID",
+                        #     "required": True,
+                        #     "align": "left",
+                        # },
+                        {
+                            "name": "title",
+                            "label": "Title",
+                            "field": "title",
+                            "required": True,
+                            "align": "left",
+                        },
+                        {
+                            "name": "status",
+                            "label": "Status",
+                            "field": "status",
+                        }
+                    ],
+                    rows=[],
+                    row_key="assetID",
+                    pagination=0,
+                )
+                .on("rowClick", lambda e: make_asset_request(e.args[1]))
+                .props("dense separator=None wrap-cells")
+                .classes("w-full")
+            )
+            ui.timer(
+                0.5,
+                lambda: assets.update_rows(
+                    app.storage.general.get("broadcastreceived", [])
+                ),
+            )
 
-                ui.timer(0.5, asset_list.update)
-            
+
             # The image display widget to show downloaded assets in real-time
-            with ui.scroll_area().classes("w-full"):
-                with ui.grid(columns=6).classes("p-1") as images:
-                    ui.timer(0.5, lambda: imageshow(os.environ['EDGE_IP'], "edgeimages"))
+            with ui.grid(columns=5).classes("p-1") as images:
+                ui.timer(0.5, lambda: dashboard_tiles(os.environ['EDGE_IP'], "dashboard_edge"))
 
