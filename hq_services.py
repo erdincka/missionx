@@ -81,7 +81,7 @@ def nasa_feed_service():
                 app.storage.general["nasafeed_count"] = app.storage.general.get("nasafeed_count", 0) + 1
                 # and update dashboard tiles with new message
                 app.storage.general["dashboard_hq"].append(
-                    tuple(["NASA Feed Service", f"Asset ID: {message['assetID']}", "New asset available from NASA", None])
+                    tuple(["NASA Feed Service", f"Asset: {message['assetID']}", "New asset available from NASA", None])
                 )
 
             else:
@@ -240,7 +240,7 @@ def asset_broadcast_service():
                     app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
                     # update dashboard with a tile
                     app.storage.general["dashboard_hq"].append(
-                        tuple(["Asset Broadcast Service", f"Broadcasting new asset, {record['assetID']}", record['title'], None])
+                        tuple(["Asset Broadcast Service", f"Broadcasting: , {record['assetID']}", record['title'], None])
                     )
                 else:
                     # update message status
@@ -306,7 +306,7 @@ def asset_response_service():
                 )
                 # update dashboard with a tile
                 app.storage.general["dashboard_hq"].append(
-                    tuple(["Asset Response Service", f"Processing request: {record['assetID']}", record['title'], None])
+                    tuple(["Asset Response Service", f"Processing: {record['assetID']}", record['title'], None])
                 )
 
         # add delay to publishing

@@ -9,7 +9,6 @@ from helpers import *
 from nicegui import app
 from time import sleep
 
-# from sparking import spark_kafka_consumer
 from streams import consume, produce
 
 logger = logging.getLogger()
@@ -94,14 +93,14 @@ def upstream_comm_service():
         if vol_response:
             result = vol_response.json()
             logger.debug("volume info: %s", result)
-            lastUpdatedSeconds = int((result["timestamp"] - result["data"][0]["lastSuccessfulMirrorTime"]) / 1000)
+            lastUpdatedSeconds = int((result.get("timestamp", 0) - result.get("data", [])[0].get("lastSuccessfulMirrorTime",0)) / 1000)
             app.storage.general["volume_replication"] = f"{lastUpdatedSeconds}s ago"
 
         else:
             logger.warning("Cannot get volume info")
 
         # check stream replication
-        REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/list?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"
+        REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/list?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&refreshnow=true"
 
         try:
             stream_response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
@@ -112,7 +111,7 @@ def upstream_comm_service():
 
         if stream_response:
             result = stream_response.json()
-            logger.debug("stream info: %s", result)
+            # logger.debug("stream info: %s", result)
 
             if result['status'] == "ERROR":
                 app.storage.general["stream_replication"] = "ERROR"
@@ -122,20 +121,26 @@ def upstream_comm_service():
                         app.storage.general["stream_replication"] = "NO STREAM"
 
             elif result['status'] == "OK":
-                app.storage.general["stream_replication"] = "OK"
-                # if result["data"][0].get('replicaState', "") == "REPLICA_STATE_REPLICATING":
-                #     app.storage.general["stream_replication"] = "REPLICATING"
-                if result["data"][0].get("paused", False) == True:
-                    # sleep(0.1)
-                    app.storage.general["stream_replication"] = "PAUSED"
-                if result["data"][0].get("isUptodate", False) == True:
-                    # sleep(0.1)
-                    app.storage.general["stream_replication"] = "IN SYNC"
+                resultData = result.get("data", {}).pop()
+                logger.debug("%s target stream: %s", EDGE_STREAM_REPLICATED, resultData)
 
-            # update dashboard with a tile
-            app.storage.general["dashboard_edge"].append(
-                tuple(["Upstream Comm Service", f"Stream replication: {EDGE_STREAM_REPLICATED}", app.storage.general['stream_replication'], None])
-            )
+                if resultData.get("replicaState", "ERROR") == app.storage.general["stream_replication"]:
+                    continue
+                else:
+                    # replicaState = resultData['replicaState'].replace("REPLICA_STATE_", "")
+                    if resultData["paused"]:
+                        replicaState = "PAUSED"
+                    elif resultData["isUptodate"]:
+                        replicaState = "SYNCED"
+                    else:
+                        replicaState = "UNKNOWN" # TODO: need a better identifier here
+
+                    # FIX: the next line is causing exception/error and cannot figure out why
+                    app.storage.general["stream_replication"] = replicaState
+                    # update dashboard with a tile
+                    app.storage.general["dashboard_edge"].append(
+                        tuple(["Upstream Comm Service", resultData['cluster'], replicaState, None])
+                    )
 
         else:
             logger.warning("Cannot get stream replica")

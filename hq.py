@@ -54,17 +54,6 @@ def hq_page():
                             ui.button('Next', on_click=stepper.next, color="secondary")
                             ui.button('Back', on_click=stepper.previous, color="none")
 
-                # manually add stream replication step (not to run in executor)
-                with ui.step("Start replication"):
-                    ui.label("We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.")
-                    with ui.stepper_navigation():
-                        ui.button("Code", on_click=lambda s=step: show_code(stream_replica_setup)).props("outline")
-                        ui.button(
-                            "Run",
-                            on_click=stream_replica_setup,
-                        )
-                        ui.button('Back', on_click=stepper.previous, color="none")
-                        
 
             # The image display widget to show downloaded assets in real-time
             # with ui.scroll_area().classes("w-full"):

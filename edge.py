@@ -17,13 +17,21 @@ def edge_page():
 
         # Connectivity indicator
         with ui.row().classes("place-items-center"):
-            ui.label().bind_text_from(app.storage.general, "stream_replication")
-            ui.button("Mirror", on_click=mirror_volume).classes("py-0 min-h-0").props("flat")
+            ui.button("Mirror", on_click=mirror_volume).classes("py-0 min-h-1").props("flat")
             ui.label().bind_text_from(app.storage.general, "volume_replication")
 
     with ui.row().classes("w-full no-wrap ml-2"):
         # left panel
         with ui.column().classes("w-fit"):
+
+            with ui.list().props('bordered separator').classes("text-xs w-full"):
+                ui.item_label('HQ Replication Status').props('header').classes('text-bold text-sm bg-primary')
+                with ui.item().classes("text-xs m-1 p-2 place-items-center"):
+                    ui.item_label().classes("no-wrap").bind_text_from(app.storage.general, "stream_replication")
+                with ui.item().classes("m-1 p-1"):
+                    ui.button(on_click=toggle_replication).classes("w-full flat secondary").bind_text_from(app.storage.general, "stream_replication", lambda x: "Resume" if x == "PAUSED" else "Pause")
+
+
             with ui.list().props('bordered separator').classes("text-xs w-full"):
                 ui.item_label('Data Feed and Services').props('header').classes('text-bold text-sm bg-primary')
                 for svc in SERVICES["EDGE"]:

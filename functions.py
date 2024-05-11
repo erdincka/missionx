@@ -151,7 +151,9 @@ def dashboard_tiles(host: str, source: str):
     }
 
     if source in app.storage.general and len(app.storage.general[source]) > 0:
-        service, title, description, imageUrl = app.storage.general[source].pop(0)
+        service, title, description, imageUrl = app.storage.general.get(source, []).pop()
+
+        logger.debug("Process tile for service: %s, title: %s, description: %s, and imageurl: %s", service, title, description, imageUrl)
 
         with ui.card().classes("h-80").props("bordered") as img:
             # lazily assign a random bg color
@@ -165,7 +167,7 @@ def dashboard_tiles(host: str, source: str):
                     ui.label(textwrap.shorten(description, 64))
             ui.space()
             with ui.card_section().classes("text-sm"):
-                ui.label(textwrap.shorten(title, 40))
+                ui.label(textwrap.shorten(title, 32))
         ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
         return img
 
@@ -199,6 +201,22 @@ async def mirror_volume():
     await run.io_bound(run_command, f"maprcli volume mirror start -cluster {os.environ['EDGE_CLUSTER']} -name {EDGE_MISSION_FILES}")
 
 
+async def toggle_replication():
+    """ FIX: not working
+    """
+    toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
+    AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
+    REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&replica={HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
+ 
+    try:
+        response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+        response.raise_for_status()
+
+        logger.debug(response.text)
+
+    except Exception as error:
+        logger.warning(error)
+
 # Handle exceptions without UI failure
 def gracefully_fail(exc: Exception):
     print("gracefully failing...")
@@ -207,8 +225,8 @@ def gracefully_fail(exc: Exception):
 
 
 def show_code(func):
-    with ui.dialog().classes("max-w-full w-full") as show, ui.card().classes("grow"):
-        ui.code(inspect.getsource(func)).classes("max-w-full w-full text-wrap")
+    with ui.dialog().props("full-width") as show, ui.card().classes("grow"):
+        ui.code(inspect.getsource(func)).classes("w-full text-wrap")
 
     show.on("close", show.clear)
     show.open()

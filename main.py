@@ -104,6 +104,18 @@ async def home():
             app.storage.user, "busy", lambda x: not x
         )
 
+        ui.space()
+
+        ui.label("We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.")
+
+        ui.code(inspect.getsource(stream_replica_setup)).classes("w-full")
+
+        ui.button("Run", on_click=stream_replica_setup).bind_enabled_from(
+            app.storage.user, "busy", lambda x: not x
+        )
+
+
+
     setup_page.bind_value(app.storage.general["ui"], "setup")
 
     ui.separator()
