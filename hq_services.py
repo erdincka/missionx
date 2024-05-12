@@ -91,7 +91,7 @@ def nasa_feed_service():
             sleep(random.random())
 
         # add delay to publishing
-        sleep(app.storage.general.get("nasafeed_delay", 1.0))
+        sleep(app.storage.general.get('nasafeed_delay', 1.0))
 
 
 @fire_and_forget
@@ -224,7 +224,6 @@ def asset_broadcast_service():
                 logger.warning("Record has failed, not publishing: %s", record["status"])
                 continue
 
-            logger.debug("Record ready to publish: %s", type(record))
             try:
                 # Publish to output topic on the replicated stream
                 if produce(

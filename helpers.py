@@ -2,7 +2,6 @@ import asyncio
 import logging
 import re
 from types import FunctionType
-from attr import dataclass
 from nicegui import ui
 
 APP_NAME = "missionX"

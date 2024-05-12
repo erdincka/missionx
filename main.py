@@ -40,7 +40,8 @@ async def home():
         prop = name.lower().replace(' ', '')
         app.storage.general[f"{prop}_count"] = 0
         app.storage.general[f"{prop}_delay"] = delay
-    
+    app.storage.general["tile_remove"] = 20
+
     # and image lists
     app.storage.general["dashboard_hq"] = []
     app.storage.general["dashboard_edge"] = []
@@ -126,10 +127,9 @@ async def home():
         with site_panels.after:
             edge_page()
 
-    ui.separator()
-
-    log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
-    logger.addHandler(LogElementHandler(log, logging.INFO))
+    # ui.separator()
+    # log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
+    # logger.addHandler(LogElementHandler(log, logging.INFO))
 
 
 # INSECURE REQUESTS ARE OK in Demos

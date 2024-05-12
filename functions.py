@@ -138,7 +138,7 @@ def dashboard_tiles(host: str, source: str):
     """
 
     BGCOLORS = {
-        "NASA Feed Service": "bg-slate-300",
+        "NASA Feed Service": "bg-sky-300",
         "Image Download Service": "bg-red-300",
         "Asset Broadcast Service": "bg-green-300",
         "Asset Response Service": "bg-orange-300",
@@ -146,8 +146,6 @@ def dashboard_tiles(host: str, source: str):
         "Broadcast Listener Service": "bg-emerald-300",
         "Asset Request Service": "bg-lime-300",
         "Asset Viewer Service": "bg-stone-300",
-        # "bg-teal-300",
-        # "bg-sky-300",
     }
 
     if source in app.storage.general and len(app.storage.general[source]) > 0:
@@ -220,7 +218,7 @@ async def toggle_replication():
 # Handle exceptions without UI failure
 def gracefully_fail(exc: Exception):
     print("gracefully failing...")
-    logger.debug("Exception: %s", exc)
+    logger.exception(exc)
     app.storage.user["busy"] = False
 
 

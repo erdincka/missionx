@@ -4,6 +4,7 @@ import socket
 
 import requests
 
+from files import getfile
 from functions import get_command_output
 from helpers import *
 from nicegui import app
@@ -85,7 +86,7 @@ def upstream_comm_service():
 
         try:
             vol_response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
-            vol_response.raise_for_status()
+            # vol_response.raise_for_status()
 
         except Exception as error:
             logger.debug(error)
@@ -93,7 +94,11 @@ def upstream_comm_service():
         if vol_response:
             result = vol_response.json()
             logger.debug("volume info: %s", result)
-            lastUpdatedSeconds = int((result.get("timestamp", 0) - result.get("data", [])[0].get("lastSuccessfulMirrorTime",0)) / 1000)
+            try:
+                lastUpdatedSeconds = int((result.get("timestamp", 0) - result.get("data", [])[0].get("lastSuccessfulMirrorTime",0)) / 1000)
+            except: # if failed to get expected data
+                app.storage.general["volume_replication"] = "ERROR"
+
             app.storage.general["volume_replication"] = f"{lastUpdatedSeconds}s ago"
 
         else:
@@ -104,14 +109,14 @@ def upstream_comm_service():
 
         try:
             stream_response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
-            stream_response.raise_for_status()
+            # stream_response.raise_for_status()
 
         except Exception as error:
             logger.debug(error)
 
         if stream_response:
             result = stream_response.json()
-            # logger.debug("stream info: %s", result)
+            logger.debug("stream info: %s", result)
 
             if result['status'] == "ERROR":
                 app.storage.general["stream_replication"] = "ERROR"
@@ -124,6 +129,7 @@ def upstream_comm_service():
                 resultData = result.get("data", {}).pop()
                 logger.debug("%s target stream: %s", EDGE_STREAM_REPLICATED, resultData)
 
+                # skip updates if same with previous state
                 if resultData.get("replicaState", "ERROR") == app.storage.general["stream_replication"]:
                     continue
                 else:
@@ -133,9 +139,10 @@ def upstream_comm_service():
                     elif resultData["isUptodate"]:
                         replicaState = "SYNCED"
                     else:
-                        replicaState = "UNKNOWN" # TODO: need a better identifier here
+                        replicaState = "UNKNOWN" # TODO: need a better error handling here
 
                     # FIX: the next line is causing exception/error and cannot figure out why
+                    # ERROR:handle_exception: There is no current event loop in thread 'ThreadPoolExecutor-2_0'.
                     app.storage.general["stream_replication"] = replicaState
                     # update dashboard with a tile
                     app.storage.general["dashboard_edge"].append(
@@ -181,7 +188,7 @@ def broadcast_listener_service():
                 record = json.loads(msg)
                 logger.debug("Received: %s", record)
 
-                record['status'] = "broadcasted"
+                record['status'] = "published"
                 app.storage.general["broadcastreceived"].append(record)
 
                 app.storage.general["broadcastlistener_count"] = (
@@ -276,32 +283,25 @@ def asset_viewer_service():
 
         logger.debug("running...")
 
-        try:
-            # FIX: workaround to select the correct cluster
-            # switch_cluster_to(os.environ['EDGE_CLUSTER'])
-            lines = get_command_output(f"hadoop fs -ls {EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES} | grep {EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES} | awk '{{ print $8 }}'")
-            if not lines: continue
+        for asset in [a for a in app.storage.general.get("broadcastreceived", []) if a["status"] == "requested"]:
+            logger.debug("Search for asset: %s", asset)
 
-            files = lines.split("\n")
-            # logger.debug("Files in volume: %s", files)
+            filepath = f"{EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES}/{asset['filename']}"
 
-            for file in files:
-                # skip empty line
-                if file == "": continue
+            response = getfile(os.environ['EDGE_IP'], filepath)
 
-                # if file is in requested assets
-                for asset in [a for a in app.storage.general.get("broadcastreceived", []) if a["status"] == "requested" and a["filename"] in file]:
-                    logger.debug("Found file for: %s", asset)
-                    asset["status"] = "received"
-                    # notify ui that we processed a request
-                    app.storage.general["assetviewer_count"] = app.storage.general.get("assetviewer_count", 0) + 1
-                    # update dashboard with a tile
-                    app.storage.general["dashboard_edge"].append(
-                        tuple(["Asset Viewer Service", f"Received: {asset['title']}", None, file])
-                    )
+            if response and response.status_code == 200:
+                logger.debug("Found asset file: %s", asset['filename'])
 
-        except Exception as error:
-            logger.debug(error)
+                asset["status"] = "received"
+                # notify ui that we processed a request
+                app.storage.general["assetviewer_count"] = app.storage.general.get("assetviewer_count", 0) + 1
+                # update dashboard with a tile
+                app.storage.general["dashboard_edge"].append(
+                    tuple(["Asset Viewer Service", f"Received: {asset['title']}", None, filepath])
+                )
+            else:
+                logger.debug("File not found for asset: %s", asset)
 
         # add delay to publishing
         sleep(app.storage.general.get("assetviewer_delay", 1.0))

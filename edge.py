@@ -17,7 +17,7 @@ def edge_page():
 
         # Connectivity indicator
         with ui.row().classes("place-items-center"):
-            ui.button("Mirror", on_click=mirror_volume).classes("py-0 min-h-1").props("flat")
+            ui.button("Mirror", on_click=mirror_volume).classes("py-0 min-h-0").props("flat")
             ui.label().bind_text_from(app.storage.general, "volume_replication")
 
     with ui.row().classes("w-full no-wrap ml-2"):
@@ -66,9 +66,9 @@ def edge_page():
                             ui.button('Back', on_click=stepper.previous, color="none")
 
             # List the broadcasted messages
-            ui.label("Available Assets")
             assets = (
                 ui.table(
+                    title="Published assets",
                     columns=[
                         # {
                         #     "name": "assetID",
@@ -95,18 +95,18 @@ def edge_page():
                     pagination=0,
                 )
                 .on("rowClick", lambda e: make_asset_request(e.args[1]))
-                .props("dense separator=None wrap-cells")
+                .props("dense separator=None wrap-cells flat bordered virtual-scroll")
                 .classes("w-full")
+                .style("height: 300px")
             )
             ui.timer(
                 0.5,
                 lambda: assets.update_rows(
-                    app.storage.general.get("broadcastreceived", [])
+                    reversed(app.storage.general.get("broadcastreceived", []))
                 ),
             )
 
-
             # The image display widget to show downloaded assets in real-time
-            with ui.grid(columns=5).classes("p-1") as images:
+            with ui.grid(columns=4).classes("p-1") as images:
                 ui.timer(0.5, lambda: dashboard_tiles(os.environ['EDGE_IP'], "dashboard_edge"))
 
