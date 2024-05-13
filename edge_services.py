@@ -195,9 +195,9 @@ def broadcast_listener_service():
                     app.storage.general.get("broadcastlistener_count", 0) + 1
                 )
                 # update dashboard with a tile
-                app.storage.general["dashboard_edge"].append(
-                    tuple(["Broadcast Listener Service", f"Broadcast Received: {record['title']}", record["description"], None])
-                )
+                # app.storage.general["dashboard_edge"].append(
+                #     tuple(["Broadcast Listener Service", f"Broadcast Received: {record['title']}", record["description"], None])
+                # )
 
         except Exception as error:
             logger.debug(error)
@@ -298,7 +298,7 @@ def asset_viewer_service():
                 app.storage.general["assetviewer_count"] = app.storage.general.get("assetviewer_count", 0) + 1
                 # update dashboard with a tile
                 app.storage.general["dashboard_edge"].append(
-                    tuple(["Asset Viewer Service", f"Received: {asset['title']}", None, filepath])
+                    tuple(["Asset Viewer Service", asset['title'], asset['description'], filepath])
                 )
             else:
                 logger.debug("File not found for asset: %s", asset)

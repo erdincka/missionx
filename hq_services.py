@@ -141,7 +141,7 @@ def image_download_service():
 
                     newMessage = {
                         "title": doc["data"][0]["title"],
-                        # "description": doc["data"][0]["description"],
+                        "description": doc["data"][0]["description"],
                         "filename": imageFilename,
                         "assetID": doc["_id"],
                     }

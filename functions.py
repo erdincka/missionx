@@ -153,20 +153,32 @@ def dashboard_tiles(host: str, source: str):
 
         logger.debug("Process tile for service: %s, title: %s, description: %s, and imageurl: %s", service, title, description, imageUrl)
 
-        with ui.card().classes("h-80").props("bordered") as img:
-            # lazily assign a random bg color
-            with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
-                ui.label(service)
-            if imageUrl is not None: # we have an image to show
+        if service == "Asset Viewer Service" or service == "Image Download Service":
+            with ui.card().classes("h-80").props("bordered").tight() as img:
+                with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
+                    ui.label(service)
                 # TODO: use /mapr mount
                 ui.image(f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{imageUrl}")
-            else:
+                ui.space()
+                with ui.card_section():
+                    ui.label(textwrap.shorten(title, 32)).classes("text-sm")
+
+            img.on("click", lambda h=host,t=title,d=description,u=imageUrl: show_image(h,t,d,u))
+            if service == "Image Download Service": # auto remove tiles if not asset viewer
+                ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
+
+        else:
+            with ui.card().classes("h-80").props("bordered") as img:
+                with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
+                    ui.label(service)
                 with ui.card_section().classes("text-sm"):
                     ui.label(textwrap.shorten(description, 64))
-            ui.space()
-            with ui.card_section().classes("text-sm"):
-                ui.label(textwrap.shorten(title, 32))
-        ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
+                ui.space()
+                with ui.card_section().classes("text-sm"):
+                    ui.label(textwrap.shorten(title, 32))
+
+            ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
+
         return img
 
 
@@ -228,3 +240,17 @@ def show_code(func):
 
     show.on("close", show.clear)
     show.open()
+
+
+def show_image(host: str, title: str, description: str, imageUrl: str):
+    with ui.dialog().props("full-width") as show, ui.card().classes("grow"):
+        ui.label(title).classes("w-full")
+        ui.space()
+        ui.label(description).classes("w-full text-wrap")
+        ui.space()
+        ui.image(f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{imageUrl}")
+
+    show.on("close", show.clear)
+    show.open()
+
+
