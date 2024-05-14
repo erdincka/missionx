@@ -127,9 +127,9 @@ async def home():
         with site_panels.after:
             edge_page()
 
-    # ui.separator()
-    # log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
-    # logger.addHandler(LogElementHandler(log, logging.INFO))
+    ui.separator()
+    log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
+    logger.addHandler(LogElementHandler(log, logging.INFO))
 
 
 # INSECURE REQUESTS ARE OK in Demos
@@ -139,6 +139,7 @@ urllib_logger.setLevel(logging.WARNING)
 
 requests_log = logging.getLogger("requests.packages.urllib3")
 requests_log.setLevel(logging.WARNING)
+
 watcher_logger = logging.getLogger("watchfiles.main")
 watcher_logger.setLevel(logging.FATAL)
 
