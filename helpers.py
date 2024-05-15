@@ -15,12 +15,12 @@ DEMO = {
 HQ_VOLUME_NAME = "missionX"
 HQ_VOLUME_PATH = "/apps/missionX"
 
-EDGE_VOLUME_NAME = "missionX.mirror"
-EDGE_VOLUME_PATH = "/apps/missionX.mirror"
+# EDGE_VOLUME_NAME = "missionX.mirror"
+EDGE_VOLUME_PATH = "/apps"
 
 STREAM_LOCAL = "pipelineStream"
 HQ_STREAM_REPLICATED = "replicatedStream"
-EDGE_STREAM_REPLICATED = "replicatedStream.replica"
+EDGE_STREAM_REPLICATED = "missionX.replicatedStream"
 
 HQ_IMAGETABLE = "imagesTable"
 TOPIC_NASAFEED = "NASAFEED"
@@ -31,7 +31,7 @@ TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
 NASA_FEED_FILE = "meta/query_results_combined-USE.json"
 IMAGE_FILE_LOCATION = "downloadedAssets"
 HQ_MISSION_FILES = "files"
-EDGE_MISSION_FILES = "files.mirror"
+EDGE_MISSION_FILES = "missionX.files"
 
 # timeout stream consumers
 MAX_POLL_TIME = 5
