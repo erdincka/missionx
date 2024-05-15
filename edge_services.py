@@ -14,6 +14,7 @@ from streams import consume, produce
 
 logger = logging.getLogger()
 
+AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
 
 @fire_and_forget
 def audit_listener_service():
@@ -78,8 +79,6 @@ def upstream_comm_service():
             break
 
         logger.debug("running...")
-
-        AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
 
         # check volume replication
         REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/volume/info?name={EDGE_MISSION_FILES}"

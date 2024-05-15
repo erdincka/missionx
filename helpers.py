@@ -15,7 +15,6 @@ DEMO = {
 HQ_VOLUME_NAME = "missionX"
 HQ_VOLUME_PATH = "/apps/missionX"
 
-# EDGE_VOLUME_NAME = "missionX.mirror"
 EDGE_VOLUME_PATH = "/apps"
 
 STREAM_LOCAL = "pipelineStream"

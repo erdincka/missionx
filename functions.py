@@ -1,7 +1,6 @@
 import inspect
 import logging
 import os
-import random
 import subprocess
 import textwrap
 from nicegui import app, run
@@ -9,6 +8,8 @@ import requests
 from helpers import *
 
 logger = logging.getLogger()
+
+AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
 
 def run_command(cmd):
     try:
@@ -75,9 +76,6 @@ async def prepare_core():
 async def prepare_edge():
     app.storage.user["busy"] = True
     # Edge resources
-    # await run.io_bound(run_command, f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
-    # await run.io_bound(run_command, f"echo {os.environ['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {os.environ['MAPR_USER']}")
-    # await run.io_bound(run_command, f"maprcli volume create -name {EDGE_VOLUME_NAME} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     await run.io_bound(run_command, f"maprcli volume create -type mirror -name {EDGE_MISSION_FILES} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{os.environ['MAPR_CLUSTER']} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     app.storage.user["busy"] = False
 
@@ -189,7 +187,6 @@ async def stream_replica_setup():
 
     logger.debug("Starting replication to %s", target_stream_path)
     REST_URL = f"https://{os.environ['MAPR_IP']}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{os.environ['EDGE_CLUSTER']}{target_stream_path}&multimaster=true"
-    AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
 
     logger.debug("REST_URL: %s", REST_URL)
     try:
@@ -215,7 +212,7 @@ async def toggle_replication():
     """ FIX: not working
     """
     toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
-    AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
+
     REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&replica={HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
  
     try:
