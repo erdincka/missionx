@@ -13,8 +13,6 @@ def produce(cluster: str, stream: str, topic: str, record: str):
     p = Producer({"streams.producer.default.stream": stream})
 
     try:
-        # FIX: workaround to select correct cluster to produce
-        # switch_cluster_to(cluster)
         logger.debug("pushing message: %s", record)
         p.produce(topic, record.encode("utf-8"))
 
@@ -30,9 +28,6 @@ def produce(cluster: str, stream: str, topic: str, record: str):
 
 def consume(cluster: str, stream: str, topic: str):
     from confluent_kafka import Consumer, KafkaError
-
-    # FIX: workaround to select correct cluster to consume
-    # switch_cluster_to(cluster)
 
     consumer = Consumer(
         {"group.id": "ezshow", "default.topic.config": {"auto.offset.reset": "earliest"}}
