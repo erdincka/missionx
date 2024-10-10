@@ -2,6 +2,7 @@ from nicegui import ui
 from functions import *
 
 from helpers import *
+from common import *
 import steps
 
 
@@ -35,7 +36,7 @@ def hq_page():
                         slider = ui.slider(min=5, max=60).bind_value(app.storage.general, "tile_remove")
                     with ui.item_section().props('side'):
                         ui.label().bind_text_from(slider, 'value')
-                
+
 
         # right panel
         with ui.column().classes("w-full mr-2"):
@@ -56,6 +57,5 @@ def hq_page():
 
 
             # The image display widget to show downloaded assets in real-time
-            # with ui.scroll_area().classes("w-full"):
-            with ui.grid(columns=4).classes("w-full") as images:
-                ui.timer(0.5, lambda: dashboard_tiles(os.environ['MAPR_IP'], "dashboard_hq"))
+            # with ui.grid(columns=4).classes("w-full") as images:
+            #     ui.timer(0.5, lambda: dashboard_tiles(os.environ['MAPR_IP'], "dashboard_hq"))

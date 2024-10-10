@@ -40,7 +40,7 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
         "maxOffsetsPerTrigger": 1000,
         "kafka.security.protocol": "SASL_PLAINTEXT",
         "kafka.sasl.mechanism": "PLAIN",
-        "kafka.sasl.jaas.config": f"org.apache.kafka.common.security.plain.PlainLoginModule required username=\"{os.environ['MAPR_USER']}\" password=\"{os.environ['MAPR_PASS']}\";"
+        "kafka.sasl.jaas.config": f"org.apache.kafka.common.security.plain.PlainLoginModule required username=\"{app.storage.user['MAPR_USER']}\" password=\"{app.storage.user['MAPR_PASS']}\";"
     }
 
     # Define schema for incoming Kafka messages

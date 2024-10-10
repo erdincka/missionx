@@ -2,14 +2,15 @@ import logging
 import os
 import importlib_resources
 
-import requests
-from nicegui import app, ui, binding
+from nicegui import app, ui
 import inspect
 from functions import *
+from common import *
 
 from hq import hq_page
 
 from edge import edge_page
+from page import footer, header
 
 # configure the logging
 configure_logging()
@@ -20,54 +21,29 @@ logger.setLevel(logging.DEBUG)
 TITLE = "Data Fabric Core to Edge Demo"
 STORAGE_SECRET = "ezmer@1r0cks"
 
-@ui.page("/")
+@ui.page("/", title="Data Fabric Demo")
 async def home():
-    if "ui" not in app.storage.general.keys():
-        app.storage.general["ui"] = {}
-
-    # if "services" not in app.storage.general.keys():
-    app.storage.general["services"] = {}
-
     # Reset previous run state if it was hang
     app.storage.user["busy"] = False
 
     # and ui counters & settings
-    for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
-        name, delay = svc
-        prop = name.lower().replace(' ', '')
-        app.storage.general[f"{prop}_count"] = 0
-        app.storage.general[f"{prop}_delay"] = delay
-    app.storage.general["tile_remove"] = 20
+    # for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
+    #     name, delay = svc
+    #     prop = name.lower().replace(' ', '')
+    #     app.storage.general[f"{prop}_count"] = 0
+    #     app.storage.general[f"{prop}_delay"] = delay
+    # app.storage.general["tile_remove"] = 20
 
-    # and image lists
-    app.storage.general["dashboard_hq"] = []
-    app.storage.general["dashboard_edge"] = []
+    # # and image lists
+    # app.storage.general["dashboard_hq"] = []
+    # app.storage.general["dashboard_edge"] = []
 
-    # and connectivity status
-    app.storage.general["stream_replication"] = ""
-    app.storage.general["volume_replication"] = ""
+    # # and connectivity status
+    # app.storage.general["stream_replication"] = ""
+    # app.storage.general["volume_replication"] = ""
 
     # Header
-    with ui.header(elevated=True).style('background-color: #3874c8').classes('items-center justify-between'):
-        ui.label(f"{APP_NAME}: {TITLE}")
-        ui.space()
-
-        ui.label("HQ Cluster:")
-        ui.link(target=f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{os.environ['MAPR_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "MAPR_CLUSTER").classes("text-sky-300 hover:text-blue-600")
-        ui.space()
-        ui.label("Edge Cluster:")
-        ui.link(target=f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{os.environ['EDGE_IP']}:8443/", new_tab=True).bind_text_from(os.environ, "EDGE_CLUSTER").classes("text-sky-300 hover:text-blue-600")
-        ui.space()
-
-        # Status indicator
-        ui.spinner("ios", size="2em", color="red").bind_visibility_from(
-            app.storage.user, "busy"
-        ).tooltip("Running")
-        ui.icon("check_circle", size="2em", color="green").bind_visibility_from(
-            app.storage.user, "busy", lambda x: not x
-        ).tooltip("Ready")
-        ui.switch(on_change=toggle_debug).bind_value(app.storage.user, "debugging").tooltip("Debug")
-
+    header(title=TITLE)
     # Info
     with ui.expansion(
         TITLE,
@@ -124,8 +100,12 @@ async def home():
             edge_page()
 
     ui.separator()
-    log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
-    logger.addHandler(LogElementHandler(log, logging.INFO))
+
+    logging_card().classes(
+        "flex-grow shrink absolute bottom-0 left-0 w-full opacity-50 hover:opacity-100"
+    )
+
+    footer()
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(

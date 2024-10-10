@@ -2,10 +2,10 @@ import logging
 from time import sleep
 import timeit
 
-from helpers import MAX_POLL_TIME
+from common import MAX_POLL_TIME
 
 
-logger = logging.getLogger()
+logger = logging.getLogger("streams")
 
 def produce(cluster: str, stream: str, topic: str, record: str):
     from confluent_kafka import Producer
@@ -19,7 +19,7 @@ def produce(cluster: str, stream: str, topic: str, record: str):
     except Exception as error:
         logger.warning(error)
         return False
-    
+
     finally:
         p.flush()
 

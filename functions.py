@@ -1,56 +1,138 @@
 import inspect
 import logging
 import os
-import subprocess
 import textwrap
+import httpx
 from nicegui import app, run
 import requests
+from common import *
 from helpers import *
 
 logger = logging.getLogger()
 
-AUTH_CREDENTIALS = (os.environ.get("MAPR_USER", "mapr"), os.environ.get("MAPR_PASS", "mapr"))
+async def run_command_with_dialog(command: str) -> None:
+    """
+    Run a command in the background and display the output in the pre-created dialog.
+    """
 
-def run_command(cmd):
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
-        if result.returncode == 0:
-            logger.debug("# %s ==> OK", cmd)
-        else:
-            logger.warning("# %s ==> %s", cmd, result.stdout)
-            logger.debug(result.stderr)
+    with ui.dialog().props("full-width") as dialog, ui.card().classes("grow relative"):
+        ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes("absolute right-2 top-2")
+        ui.label(f"Running: {command}").classes("text-bold")
+        result = ui.log().classes("w-full mt-2").style("white-space: pre-wrap")
 
-        if result.stdout != "":
-            logger.debug(result.stdout)
-        if result.stderr != "":
-            if "Failed to connect to IPv6" not in result.stderr:
-                logger.debug(result)
+    dialog.on("close", lambda d=dialog: d.delete())
+    dialog.open()
+
+    result.content = ''
+
+    async for out in run_command(command): result.push(out)
+
+
+async def run_command(command: str):
+    """
+    Run a command in the background and return the output.
+    """
+
+    process = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+
+    # NOTE we need to read the output in chunks, otherwise the process will block
+    while True:
+        new = await process.stdout.read(4096)
+        if not new:
+            break
+        yield new.decode()
+
+    yield f"Finished: {command}"
+
+
+def get_cluster_name(key: str):
+    """
+    Get the name of the cluster from the settings.
+    """
+
+    if key in app.storage.user.keys() and "name" in app.storage.user[key].keys():
+        return app.storage.user[key]["name"]
+    else:
+        return None
+
+
+async def delete_volumes_and_streams(cluster: str, volumes: list):
+    """
+    Delete all streams and volumes for a cluster.
+    params:
+    cluster - the name of the cluster to delete from, either "HQ" or "EDGE"
+    volumes - a list of volume names to delete
+    """
+
+    host = app.storage.user[cluster]["ip"]
+    auth = (app.storage.user[cluster + "_USER"], app.storage.user[cluster + "_PASS"])
+
+    app.storage.user['busy'] = True
+
+    for vol in volumes:
+
+        URL = f"https://{app.storage.user[host]}:8443/rest/volume/remove?name={vol}"
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(URL, auth=auth)
+
+            if response is None or response.status_code != 200:
+                logger.warning("REST failed for delete volume: %s", vol)
+                logger.warning("Response: %s", response.text)
+
             else:
-                logger.debug("ignoring IPv6 errors...")
+                res = response.json()
+                if res['status'] == "OK":
+                    ui.notify(f"Volume '{vol}' deleted", type='warning')
+                elif res['status'] == "ERROR":
+                    ui.notify(f"{vol}: {res['errors'][0]['desc']}", type='warning')
 
-    except Exception as error:
-        logger.warning(error)
+    app.storage.user['busy'] = False
 
 
-def get_command_output(cmd):
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
-        if result.returncode == 0:
-            logger.debug("# %s ==> OK", cmd)
-        else:
-            logger.warning("# %s ==> %s", cmd, result.stdout)
-            logger.debug(result.stderr)
+# def run_command(cmd):
+#     try:
+#         result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
+#         if result.returncode == 0:
+#             logger.debug("# %s ==> OK", cmd)
+#         else:
+#             logger.warning("# %s ==> %s", cmd, result.stdout)
+#             logger.debug(result.stderr)
 
-        if result.stdout != "":
-            return result.stdout
-        if result.stderr != "":
-            if "Failed to connect to IPv6" not in result.stderr:
-                logger.debug(result)
-            else:
-                logger.debug("ignoring IPv6 errors...")
+#         if result.stdout != "":
+#             logger.debug(result.stdout)
+#         if result.stderr != "":
+#             if "Failed to connect to IPv6" not in result.stderr:
+#                 logger.debug(result)
+#             else:
+#                 logger.debug("ignoring IPv6 errors...")
 
-    except Exception as error:
-        logger.warning(error)
+#     except Exception as error:
+#         logger.warning(error)
+
+
+# def get_command_output(cmd):
+#     try:
+#         result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
+#         if result.returncode == 0:
+#             logger.debug("# %s ==> OK", cmd)
+#         else:
+#             logger.warning("# %s ==> %s", cmd, result.stdout)
+#             logger.debug(result.stderr)
+
+#         if result.stdout != "":
+#             return result.stdout
+#         if result.stderr != "":
+#             if "Failed to connect to IPv6" not in result.stderr:
+#                 logger.debug(result)
+#             else:
+#                 logger.debug("ignoring IPv6 errors...")
+
+#     except Exception as error:
+#         logger.warning(error)
 
 
 # def switch_cluster_to(dest: str):
@@ -77,7 +159,7 @@ async def prepare_edge():
     app.storage.user["busy"] = True
     # Edge resources
     await run.io_bound(run_command, f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
-    await run.io_bound(run_command, f"echo {os.environ['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {os.environ['MAPR_USER']}")
+    await run.io_bound(run_command, f"echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {app.storage.user['MAPR_USER']}")
     await run.io_bound(run_command, f"maprcli volume create -type mirror -name {EDGE_MISSION_FILES} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{os.environ['MAPR_CLUSTER']} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     app.storage.user["busy"] = False
 
@@ -158,7 +240,7 @@ def dashboard_tiles(host: str, source: str):
                 with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
                     ui.label(service)
                 # TODO: use /mapr mount
-                ui.image(f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{imageUrl}")
+                ui.image(f"https://{app.storage.user['MAPR_USER']}:{app.storage.user['MAPR_PASS']}@{host}:8443/files{imageUrl}")
                 ui.space()
                 with ui.card_section():
                     ui.label(textwrap.shorten(title, 32)).classes("text-sm")
@@ -192,7 +274,7 @@ async def stream_replica_setup():
 
     logger.debug("REST_URL: %s", REST_URL)
     try:
-        response = await run.io_bound(requests.get, url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+        response = await run.io_bound(requests.get, url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)
         response.raise_for_status()
 
     except Exception as error:
@@ -218,7 +300,7 @@ async def toggle_replication():
     REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&replica={HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
 
     try:
-        response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+        response = requests.get(url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)
         response.raise_for_status()
 
         logger.debug(response.text)
@@ -241,7 +323,7 @@ def show_image(host: str, title: str, description: str, imageUrl: str):
         ui.space()
         ui.label(description).classes("w-full text-wrap")
         ui.space()
-        ui.image(f"https://{os.environ['MAPR_USER']}:{os.environ['MAPR_PASS']}@{host}:8443/files{imageUrl}")
+        ui.image(f"https://{app.storage.user['MAPR_USER']}:{app.storage.user['MAPR_PASS']}@{host}:8443/files{imageUrl}")
 
     show.on("close", show.clear)
     show.open()

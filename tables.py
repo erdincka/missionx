@@ -1,6 +1,7 @@
 import logging
 import os
 from mapr.ojai.storage.ConnectionFactory import ConnectionFactory
+from nicegui import app
 
 logger = logging.getLogger()
 
@@ -11,17 +12,17 @@ def get_cert_domain():
                 return line.split(" CN = *.")[1]
 
     return ""
-        
+
 def get_connection(host: str):
     ### FIX: bruteforce cert validation
     domain = get_cert_domain()
 
     # Create a connection to data access server
-    connection_str = f"{host}:5678?auth=basic;user={os.environ['MAPR_USER']};password={os.environ['MAPR_PASS']};" \
+    connection_str = f"{host}:5678?auth=basic;user={app.storage.user['MAPR_USER']};password={app.storage.user['MAPR_PASS']};" \
             "ssl=true;" \
             "sslCA=/opt/mapr/conf/ssl_truststore.pem;" \
             f"sslTargetNameOverride=client.{domain}"
-    
+
     return ConnectionFactory.get_connection(connection_str=connection_str)
 
 def upsert_document(host: str, table: str, json_dict: dict):
@@ -39,7 +40,7 @@ def upsert_document(host: str, table: str, json_dict: dict):
         logger.warning(error)
         return False
 
-    finally:        
+    finally:
         # close the OJAI connection
         connection.close()
 
@@ -61,7 +62,7 @@ def find_document_by_id(host: str, table: str, docid: str):
     except Exception as error:
         logger.warning(error)
 
-    finally:        
+    finally:
         # close the OJAI connection
         connection.close()
         return doc

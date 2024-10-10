@@ -3,6 +3,7 @@ from edge_services import make_asset_request
 from functions import *
 
 from helpers import *
+from common import *
 import steps
 
 def edge_page():
@@ -107,6 +108,5 @@ def edge_page():
             )
 
             # The image display widget to show downloaded assets in real-time
-            with ui.grid(columns=4).classes("p-1") as images:
-                ui.timer(0.5, lambda: dashboard_tiles(os.environ['EDGE_IP'], "dashboard_edge"))
-
+            # with ui.grid(columns=4).classes("p-1") as images:
+            #     ui.timer(0.5, lambda: dashboard_tiles(os.environ['EDGE_IP'], "dashboard_edge"))

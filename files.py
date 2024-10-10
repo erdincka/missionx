@@ -27,7 +27,7 @@ def putfile(host: str, file: str, destfolder: str, *args, **kwargs):
         with open(filepath, "rb") as f:
             response = requests.put(
                 url=REST_URL,
-                auth=(os.environ["MAPR_USER"], os.environ["MAPR_PASS"]),
+                auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]),
                 verify=False,
                 data=f,
                 timeout=5,
@@ -54,7 +54,7 @@ def getfile(host: str, filepath: str, *args, **kwargs):
     try:
         response = requests.get(
             url=REST_URL,
-            auth=(os.environ["MAPR_USER"], os.environ["MAPR_PASS"]),
+            auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]),
             verify=False,
             timeout=5,
             *args,
@@ -66,4 +66,3 @@ def getfile(host: str, filepath: str, *args, **kwargs):
     except Exception as error:
         logger.warning("GETFILE ERROR %s", error)
         return None
-

@@ -5,7 +5,6 @@ import socket
 import requests
 
 from files import getfile
-from functions import get_command_output
 from helpers import *
 from nicegui import app
 from time import sleep
@@ -13,8 +12,6 @@ from time import sleep
 from streams import consume, produce
 
 logger = logging.getLogger()
-
-AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
 
 @fire_and_forget
 def audit_listener_service():
@@ -38,7 +35,7 @@ def audit_listener_service():
         logger.debug("running...")
 
         host_fqdn = socket.getfqdn(os.environ["EDGE_IP"])
-        
+
         for msg in consume(
             cluster=os.environ["EDGE_CLUSTER"],
             stream=audit_stream_path,
@@ -84,7 +81,7 @@ def upstream_comm_service():
         REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/volume/info?name={EDGE_MISSION_FILES}"
 
         try:
-            vol_response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+            vol_response = requests.get(url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)
             # vol_response.raise_for_status()
 
         except Exception as error:
@@ -107,7 +104,7 @@ def upstream_comm_service():
         REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/list?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&refreshnow=true"
 
         try:
-            stream_response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
+            stream_response = requests.get(url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)
             # stream_response.raise_for_status()
 
         except Exception as error:
