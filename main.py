@@ -11,14 +11,11 @@ from hq import hq_page
 
 from edge import edge_page
 
-logging.basicConfig(level=logging.INFO,
-                format="%(asctime)s:%(levelname)s:%(funcName)s: %(message)s",
-                datefmt='%H:%M:%S')
+# configure the logging
+configure_logging()
 
-logger = logging.getLogger()
-
-# https://sam.hooke.me/note/2023/10/nicegui-binding-propagation-warning/
-binding.MAX_PROPAGATION_TIME = 0.05
+# logger = logging.getLogger("main")
+logger.setLevel(logging.DEBUG)
 
 TITLE = "Data Fabric Core to Edge Demo"
 STORAGE_SECRET = "ezmer@1r0cks"
@@ -116,7 +113,6 @@ async def home():
         )
 
 
-
     setup_page.bind_value(app.storage.general["ui"], "setup")
 
     ui.separator()
@@ -131,27 +127,6 @@ async def home():
     log = ui.log().classes("w-full h-40 resize-y").style("white-space: pre-wrap")
     logger.addHandler(LogElementHandler(log, logging.INFO))
 
-
-# INSECURE REQUESTS ARE OK in Demos
-requests.packages.urllib3.disable_warnings()
-urllib_logger = logging.getLogger("urllib3.connectionpool")
-urllib_logger.setLevel(logging.WARNING)
-
-requests_log = logging.getLogger("requests.packages.urllib3")
-requests_log.setLevel(logging.WARNING)
-
-watcher_logger = logging.getLogger("watchfiles.main")
-watcher_logger.setLevel(logging.FATAL)
-
-faker_log = logging.getLogger("faker.factory")
-faker_log.setLevel(logging.FATAL)
-
-paramiko_log = logging.getLogger("paramiko.transport")
-paramiko_log.setLevel(logging.FATAL)
-
-charset_log = logging.getLogger("charset_normalizer")
-charset_log.setLevel(logging.FATAL)
-
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
         title=TITLE,
@@ -161,4 +136,6 @@ if __name__ in {"__main__", "__mp_main__"}:
         port=3000,
     )
 
+# catch-all exceptions
 app.on_exception(gracefully_fail)
+# app.on_disconnect(app_init)

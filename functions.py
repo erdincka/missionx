@@ -9,7 +9,7 @@ from helpers import *
 
 logger = logging.getLogger()
 
-AUTH_CREDENTIALS = (os.environ["MAPR_USER"], os.environ["MAPR_PASS"])
+AUTH_CREDENTIALS = (os.environ.get("MAPR_USER", "mapr"), os.environ.get("MAPR_PASS", "mapr"))
 
 def run_command(cmd):
     try:
@@ -133,7 +133,7 @@ def service_settings(service: tuple):
 # return image to display on UI
 def dashboard_tiles(host: str, source: str):
     """
-    host: 
+    host:
     source: string of key in app.storage.general, hq_dashboard | edge_dashboard, contains: list[DashboardTile]
     """
 
@@ -216,7 +216,7 @@ async def toggle_replication():
     toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
 
     REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&replica={HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
- 
+
     try:
         response = requests.get(url=REST_URL, auth=AUTH_CREDENTIALS, verify=False)
         response.raise_for_status()
@@ -225,12 +225,6 @@ async def toggle_replication():
 
     except Exception as error:
         logger.warning(error)
-
-# Handle exceptions without UI failure
-def gracefully_fail(exc: Exception):
-    print("gracefully failing...")
-    logger.exception(exc)
-    app.storage.user["busy"] = False
 
 
 def show_code(func):
@@ -251,5 +245,3 @@ def show_image(host: str, title: str, description: str, imageUrl: str):
 
     show.on("close", show.clear)
     show.open()
-
-
