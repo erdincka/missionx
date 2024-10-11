@@ -6,11 +6,23 @@ In a partially connected world of field teams, seamless communication and data s
 
 In this demo, we are building a data pipeline using 2 Ezmeral Data Fabric cluster that are using microservices to communicate with each other (via message streaming) and providing on-demand access to data relevant to the field team utilising their limited bandwidth by only exchanging messages and files that they requested.
 
-## Demo Environment
+## Prerequisites
 
-This application is designed to be working on a specific environment where all Ezmeral Data Fabric client and settings are configured for proper applications. We use a [containerized app](https://github.com/erdincka/missionx-image) to simplify this.
+Setup Data Fabric clusters with Cross Cluster (Global Namespace) enabled. Refer to [this](./XCLUSTER.md) for details. Optionally create a user with volume, table and stream creation rights. For isolated/standalone demo environments, you can simply use the cluster admin `mapr` user.
 
-Demo starts with setting up the required volumes, streams and tables for the pipelines. Then you can start the microservices in order to follow up the communication flow, or start all of them at once and monitor the flow of information.
+Data Fabric core cluster should have following packages installed and configured:
+
+```bash
+# mapr-hivemetastore
+# mapr-kafka
+# mapr-nfs4server or mapr-nfs ### Global Namespace with external NFS mount will work only with mapr-nfs4server
+mapr-data-access-gateway
+# mapr-hbase
+```
+
+### Initial configuration
+
+Use the disconnected link icon to complete initial setup. This will require you to provide the host details to connect to the Data Fabric node where Data Access Gateway service is running. It will update the app configuration, and create the required (/app/[bronze|silver|gold]/) volumes and streams on the Data Fabric cluster.
 
 ## Demo Flow
 
@@ -28,13 +40,13 @@ Final HQ service, Asset Response Service is waiting for a specific topic (ASSET_
 
 Edge teams first need to ensure Upstream Communication is enabled, meaning the replicated stream is receiving message, and Volume can start mirroring when they made a request for an asset.
 
-Stream replication happens continuously as long as connectivity between clusters is established. 
+Stream replication happens continuously as long as connectivity between clusters is established.
 
 When the Broadcast Listener Service is started, it will monitor the replica stream for any broadcasted asset, and will place the information into the table for the team to monitor/select.
 
 Asset Request Service will wait for any message that is marked as "Requesting..." from the table, which in turn will publish a message to the "ASSET_REQUEST" topic. Since the Data Fabric Streams are bi-directional (multi-master), we can have "ASSET_BROADCAST" topic to publish messages from HQ to all field teams, and "ASSET_REQUEST" topic to publish messages from the field teams back to the HQ. Once the request is published, you will see the asset being marked as "Requested" on the table.
 
-At that point, you would monitor the tiles on HQ side, which should show an "Asset Response" for the requested asset, which means the data is copied and available on the mirrored volume. This may take a few minutes due to delays introduced in the app (so not everything flows very fast) and also for the fact that stream replication is not synchronous. 
+At that point, you would monitor the tiles on HQ side, which should show an "Asset Response" for the requested asset, which means the data is copied and available on the mirrored volume. This may take a few minutes due to delays introduced in the app (so not everything flows very fast) and also for the fact that stream replication is not synchronous.
 
 Once the asset request is responded, then the field team can start Asset Viewer Service and then re-initiate the volume mirror to get the asset data files to be sent. This process also can take from few seconds to a minute, but then you should see the tile being displayed with the actual asset data (image) copied from the HQ volume. We keep volume mirror as a manual process to give full control to the field team on when they would like to use their bandwidth for data transfers.
 
@@ -44,7 +56,7 @@ TBD
 
 ## NOTES
 
-You may stop running apps by clicking on their names at the left hand side list. This may be useful if there are too many messages and/or tiles flowing and you have troubles finding the ones that you are interested. 
+You may stop running apps by clicking on their names at the left hand side list. This may be useful if there are too many messages and/or tiles flowing and you have troubles finding the ones that you are interested.
 
 It is also useful, since at times services may fail silently, but UI is not updated with that. In those cases, just stop the services and restart them.
 

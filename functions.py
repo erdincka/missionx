@@ -59,6 +59,140 @@ def get_cluster_name(key: str):
     else:
         return None
 
+async def create_volumes(host: str, volumes: list):
+    """
+    Create an app folder and create volumes in it
+    """
+
+    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
+
+    app.storage.user['busy'] = True
+
+    for vol in volumes:
+        volname = vol.split("/")[-1]
+
+        URL = f"https://{host}:8443/rest/volume/create?name={volname}&path={vol}&replication=1&minreplication=1&nsreplication=1&nsminreplication=1"
+
+        logger.debug("REST call to: %s", URL)
+
+        try:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+                response = await client.post(URL, auth=auth)
+
+                if response is None or response.status_code != 200:
+                    logger.warning("REST failed for create volume: %s on %s", vol, host)
+                    logger.warning("Response: %s", response.text)
+
+                else:
+                    res = response.json()
+                    if res['status'] == "OK":
+                        ui.notify(f"{res['messages'][0]}", type='positive')
+                    elif res['status'] == "ERROR":
+                        ui.notify(f"{res['errors'][0]['desc']}", type='warning')
+
+        except Exception as error:
+            logger.warning("Failed to connect %s!", URL)
+            ui.notify(f"Failed to connect to REST.", type='negative')
+            logger.debug(error)
+            app.storage.user['busy'] = False
+            return False
+
+    app.storage.user['busy'] = False
+    return True
+
+
+async def create_tables(host: str, tables: list):
+    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
+
+    app.storage.user['busy'] = True
+    for table in tables:
+        try:
+            # Create table
+            async with httpx.AsyncClient(verify=False) as client:
+                URL = f"https://{host}:8443/rest/table/create?path={table}&tabletype=json&defaultreadperm=p&defaultwriteperm=p&defaultappendperm=p&defaultunmaskedreadperm=p"
+                response = await client.post(
+                    url=URL,
+                    auth=auth
+                )
+
+                # logger.debug(response.json())
+
+                if response is None or response.status_code != 200:
+                    # possibly not an issue if table already exists
+                    logger.warning("REST failed for create table: %s on %s", table, host)
+                    logger.warning("Response: %s", response.text)
+
+                else:
+                    res = response.json()
+                    if res['status'] == "OK":
+                        ui.notify(f"Table \"{table}\" created", type='positive')
+                    elif res['status'] == "ERROR":
+                        ui.notify(f"Table: \"{table}\": {res['errors'][0]['desc']}", type='warning')
+
+            # Create Column Family
+            async with httpx.AsyncClient(verify=False) as client:
+                URL = f"https://{host}:8443/rest/table/cf/create?path={table}&cfname=cf1"
+                response = await client.post(
+                    url=URL,
+                    auth=auth
+                )
+
+                # logger.debug(response.json())
+
+                if response is None or response.status_code != 200:
+                    # possibly not an issue if table already exists
+                    logger.warning("REST failed for create table: %s on %s", table, host)
+                    logger.warning("Response: %s", response.text)
+
+                else:
+                    res = response.json()
+                    if res['status'] == "OK":
+                        ui.notify(f"Column Family created for table in {table}", type='positive')
+                    elif res['status'] == "ERROR":
+                        ui.notify(f"Column Family failed for table in {table}: {res['errors'][0]['desc']}", type='warning')
+
+        except Exception as error:
+            logger.warning("Failed to connect %s: %s", URL, error)
+            ui.notify(f"Failed to connect to REST: {type(error)}", type='negative')
+            app.storage.user['busy'] = False
+            return False
+
+    app.storage.user['busy'] = False
+    return True
+
+
+async def create_streams(host: str, streams: list):
+    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
+
+    for stream in streams:
+        URL = f"https://{host}:8443/rest/stream/create?path={stream}&ttl=38400&compression=lz4&produceperm=p&consumeperm=p&topicperm=p"
+
+        app.storage.user['busy'] = True
+        try:
+            async with httpx.AsyncClient(verify=False) as client:
+                response = await client.post(URL, auth=auth)
+
+                if response is None or response.status_code != 200:
+                    # possibly not an issue if stream already exists
+                    logger.warning("REST failed for create stream: %s on %s", stream, host)
+                    logger.warning("Response: %s", response.text)
+
+                else:
+                    res = response.json()
+                    if res['status'] == "OK":
+                        ui.notify(f"Stream \"{stream}\" created", type='positive')
+                    elif res['status'] == "ERROR":
+                        ui.notify(f"Stream: \"{stream}\": {res['errors'][0]['desc']}", type='warning')
+
+        except Exception as error:
+            logger.warning("Failed to connect %s: %s", URL, type(error))
+            ui.notify(f"Failed to connect to REST: {error}", type='negative')
+            app.storage.user['busy'] = False
+            return False
+
+    app.storage.user['busy'] = False
+    return True
+
 
 async def delete_volumes_and_streams(cluster: str, volumes: list):
     """
@@ -147,7 +281,7 @@ async def delete_volumes_and_streams(cluster: str, volumes: list):
 async def prepare_core():
     app.storage.user["busy"] = True
     # HQ resources
-    await run.io_bound(run_command, f"maprcli volume create -name {HQ_VOLUME_NAME} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
+    await run.io_bound(run_command, f"maprcli volume create -name {HQ_VOLUME_PATH} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     await run.io_bound(run_command, f"maprcli table create -path {HQ_VOLUME_PATH}/{HQ_IMAGETABLE} -tabletype json")
     await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_LOCAL} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
     await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")

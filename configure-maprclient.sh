@@ -2,8 +2,20 @@
 
 set -euo pipefail
 
+## Ensure user
+export MAPR_GROUP=mapr \
+    MAPR_HOME=/opt/mapr \
+    MAPR_UID=5000
+id mapr || useradd -u ${MAPR_UID} -U -m -d /home/${MAPR_USER} -s /bin/bash -G sudo ${MAPR_USER}
+
+# Ensure ssh id
+[ -f ~/.ssh/id_rsa ] || ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -q -N ""
+
 # remove old entries
-ssh-keygen -f "~/.ssh/known_hosts" -R ${CLUSTER_IP} || true # ignore errors/not-found
+ssh-keygen -R ${CLUSTER_IP} || true # ignore errors/not-found
+
+# Enable passwordless login
+sshpass -p "${MAPR_PASS}" ssh-copy-id -o StrictHostKeyChecking=no "${MAPR_USER}@${CLUSTER_IP}"
 
 scp -o StrictHostKeyChecking=no $MAPR_USER@$CLUSTER_IP:/opt/mapr/conf/ssl_truststore* /opt/mapr/conf/
 
@@ -41,10 +53,10 @@ fi
 # create user ticket
 echo ${MAPR_PASS} | maprlogin password -cluster ${CLUSTER_NAME} -user ${MAPR_USER}
 
-# # (Re-)Mount /mapr
-# [ -d /mapr ] && umount -l /mapr || true # ignore errors (no dir or not mounted)
-# [ -d /mapr ] || mkdir /mapr
+# (Re-)Mount /mapr
+[ -d /mapr ] && umount -l /mapr || true # ignore errors (no dir or not mounted)
+[ -d /mapr ] || mkdir /mapr
 
-# mount -t nfs -o nolock,soft ${CLUSTER_IP}:/mapr /mapr
+mount -t nfs -o nolock,soft ${CLUSTER_IP}:/mapr /mapr
 
 echo "Cluster configuration is complete for ${CLUSTER_NAME}"

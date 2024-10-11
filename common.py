@@ -1,5 +1,7 @@
 
 APP_NAME = "missionX"
+TITLE = "Data Fabric Core to Edge Demo"
+STORAGE_SECRET = "ezmer@1r0cks"
 
 DEMO = {
     "name": "core to edge",
@@ -8,12 +10,12 @@ DEMO = {
     "link": "https://github.com/erdincka/missionx"
 }
 
-MOUNT_DIR = "/mapr"
+MOUNT_PATH = "/mapr"
 
-HQ_VOLUME_NAME = "missionX"
+# HQ_VOLUME_NAME = "missionX"
 HQ_VOLUME_PATH = "/apps/missionX"
 
-EDGE_VOLUME_PATH = "/apps"
+EDGE_VOLUME_PATH = "/apps/missionX-edge"
 
 STREAM_LOCAL = "pipelineStream"
 HQ_STREAM_REPLICATED = "replicatedStream"
