@@ -109,24 +109,34 @@ def header(title: str):
         ui.space()
 
         with ui.row().classes("place-items-center"):
+            # HQ MCS link
             ui.link(
                 target=f"https://{app.storage.user.get('MAPR_USER', '')}:{app.storage.user.get('MAPR_PASS', '')}@{app.storage.user.get('HQ_HOST', '')}:8443/app/mcs/",
                 new_tab=True
             ).classes(
                 "text-white hover:text-blue-600"
-            ).bind_text_from(app.storage.user, "clusterinfo", backward=lambda x: x["name"] if x else "No Cluster"
-            ).bind_visibility_from(app.storage.user, "clusterinfo", backward=lambda x: x and len(x) > 0)
+            ).bind_text_from(app.storage.user, "HQ", backward=lambda x: x["name"] if x else "No HQ Cluster"
+            ).bind_visibility_from(app.storage.user, "HQ", backward=lambda x: x and len(x) > 0)
+
+            # EDGE MCS link
+            ui.link(
+                target=f"https://{app.storage.user.get('MAPR_USER', '')}:{app.storage.user.get('MAPR_PASS', '')}@{app.storage.user.get('EDGE_HOST', '')}:8443/app/mcs/",
+                new_tab=True
+            ).classes(
+                "text-white hover:text-blue-600"
+            ).bind_text_from(app.storage.user, "EDGE", backward=lambda x: x["name"] if x else "No HQ Cluster"
+            ).bind_visibility_from(app.storage.user, "EDGE", backward=lambda x: x and len(x) > 0)
 
             # Connect to a cluster
             # ui.label("Not configured!").classes("text-bold red").bind_visibility_from(app.storage.user, "cluster", backward=lambda x: not x or len(x) == 0)
-            ui.button(icon="link" if "clusterinfo" in app.storage.user.keys() else "link_off", on_click=cluster_connect).props("flat color=light")
+            ui.button(icon="link" if "configured" in app.storage.user.keys() and app.storage.user["configured"] else "link_off", on_click=cluster_connect).props("flat color=light")
 
-            # ui.button(icon="settings", on_click=demo_configuration_dialog).props(
-            #     "flat color=light"
-            # )
+            ui.button(icon="settings", on_click=demo_configuration_dialog).props(
+                "flat color=light"
+            )
 
             ui.icon("error", size="2em", color="red").bind_visibility_from(
-                app.storage.user, "clusterinfo", lambda x: not x or len(x) == 0
+                app.storage.user, "configured", lambda x: not x
             ).tooltip("Requires configuration!")
 
             with ui.element("div").bind_visibility_from(app.storage.user, "demo_mode"):
@@ -152,21 +162,21 @@ def footer():
                 ui.button(
                     "GNS",
                     on_click=lambda: run_command_with_dialog(
-                        f"df -h {MOUNT_PATH}; ls -lA {MOUNT_PATH}"
+                        f"df -h {MOUNT_PATH}/*; ls -lA {MOUNT_PATH}"
                     ),
                 )
                 # Core folder
                 ui.button(
                     "HQ",
                     on_click=lambda: run_command_with_dialog(
-                        f"ls -lA {MOUNT_PATH}/{get_cluster_name('HQ')}/"
+                        f"ls -lA {MOUNT_PATH}/{get_cluster_name('HQ')}{HQ_VOLUME_PATH}"
                     ),
                 )
                 # Volumes
                 ui.button(
                     "Edge",
                     on_click=lambda: run_command_with_dialog(
-                        f"ls -lAR {MOUNT_PATH}/{get_cluster_name('EDGE')}/"
+                        f"ls -lAR {MOUNT_PATH}/{get_cluster_name('EDGE')}{EDGE_VOLUME_PATH}"
                     ),
                 )
 
@@ -189,7 +199,7 @@ def footer():
 
 def cluster_connect():
     # with ui.dialog().props("full-width") as cluster_connect_dialog, ui.card():
-    with ui.dialog() as cluster_connect_dialog, ui.card().classes("w-full"):
+    with ui.dialog() as cluster_connect_dialog, ui.card().classes("w-full place-items-center"):
         with ui.row().classes("w-full place-items-center"):
             with ui.grid(columns=2).classes("flex-grow"):
                 ui.input("HQ Node").classes("flex-grow").bind_value(app.storage.user, "HQ_HOST")
@@ -197,7 +207,7 @@ def cluster_connect():
             with ui.grid(columns=2).classes("flex-grow"):
                 ui.input("Username").classes("flex-grow").bind_value(app.storage.user, "MAPR_USER")
                 ui.input("Password", password=True, password_toggle_button=True).classes("flex-grow").bind_value(app.storage.user, "MAPR_PASS")
-        ui.button(icon="rocket_launch", on_click=run_configuration_steps)
+        ui.button("Configure & create...", icon="rocket_launch", on_click=run_configuration_steps).tooltip("Configures maprclient and creates volumes, streams and tables required for the demo")
 
         ui.separator()
 
@@ -218,52 +228,57 @@ async def run_configuration_steps():
         if step["name"] == "clusterinfo":
             step["status"] = "run_circle"
 
-            try:
-                auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
-                URL = f"https://{app.storage.user['HQ_HOST']}:8443/rest/dashboard/info"
+            for cluster in "HQ", "EDGE": # update app.storage with both cluster's clusterinfo
+                try:
+                    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
+                    URL = f"https://{app.storage.user[cluster + '_HOST']}:8443/rest/dashboard/info"
 
-                async with httpx.AsyncClient(verify=False) as client:
-                    response = await client.get(URL, auth=auth)
+                    async with httpx.AsyncClient(verify=False) as client:
+                        response = await client.get(URL, auth=auth)
 
-                    # logger.debug(response.text)
+                        # logger.debug(response.text)
 
-                    if response is None or response.status_code != 200:
-                        logger.warning("Response: %s", response.text)
-                        step["status"] = "error"
+                        if response is None or response.status_code != 200:
+                            logger.warning("Response: %s", response.text)
+                            step["status"] = "error"
 
-                    else:
-                        res = response.json()
-                        # logger.debug("Got dashboard data: %s", json.dumps(res))
-                        # Set cluster information
-                        app.storage.user["clusterinfo"] = res["data"][0]["cluster"]
-                        step["status"] = "check"
+                        else:
+                            res = response.json()
+                            # logger.debug("Got dashboard data: %s", json.dumps(res))
+                            # Set cluster information
+                            app.storage.user[cluster] = res["data"][0]["cluster"]
 
-            except Exception as error:
-                logger.error("Failed to connect to cluster.")
-                logger.info(error)
-                step["status"] = "error"
+                except Exception as error:
+                    logger.error("Failed to connect to cluster.")
+                    logger.info(error)
+                    step["status"] = "error"
+
+            step["status"] = "check"
 
         # Step 2 - Configure cluster
         elif step["name"] == "reconfigure":
             step["status"] = "run_circle"
 
-            os.environ["CLUSTER_IP"] = app.storage.user["clusterinfo"]["ip"]
-            os.environ["CLUSTER_NAME"] = app.storage.user["clusterinfo"]["name"]
+            # Run configuration for client only on HQ
+            os.environ["CLUSTER_IP"] = app.storage.user["HQ"]["ip"]
+            os.environ["CLUSTER_NAME"] = app.storage.user["HQ"]["name"]
             os.environ["MAPR_USER"] = app.storage.user["MAPR_USER"]
             os.environ["MAPR_PASS"] = app.storage.user["MAPR_PASS"]
-            async for out in run_command("/bin/bash ./configure-maprclient.sh"):
-                logger.info(out.strip())
+            # async for out in run_command("/bin/bash ./configure-maprclient.sh"):
+            #     logger.info(out.strip())
 
             step["status"] = "check"
 
         # Step 3 - Create volumes and streams
         elif step["name"] == "createvolumes":
             step["status"] = "run_circle"
-            if await create_volumes(app.storage.user["HQ_HOST"], [HQ_VOLUME_PATH]) \
-                and await create_tables(app.storage.user["HQ_HOST"], [HQ_IMAGETABLE]) \
-                and await create_streams(app.storage.user["HQ_HOST"], [STREAM_LOCAL, HQ_STREAM_REPLICATED]) \
+            if await create_volumes(app.storage.user["HQ_HOST"], [HQ_VOLUME_PATH, HQ_MISSION_FILES]) \
+                and await create_tables(app.storage.user["HQ_HOST"], [f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"]) \
+                and await create_streams(app.storage.user["HQ_HOST"], [f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}", f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"]) \
                 and await create_volumes(app.storage.user["EDGE_HOST"], [EDGE_VOLUME_PATH]) \
-                and await create_streams(app.storage.user["EDGE_HOST"],[EDGE_STREAM_REPLICATED]):
+                and await create_mirror_volume(get_cluster_name("HQ"), app.storage.user["EDGE_HOST"], HQ_MISSION_FILES, EDGE_MISSION_FILES):
+                # These should be created later on demo steps
+                # and await create_streams(app.storage.user["EDGE_HOST"],[f"{EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"]):
                 # and await create_tables(app.storage.user["EDGE_HOST"], []) \
                 step["status"] = "check"
             else: step["status"] = "error"
@@ -274,82 +289,82 @@ async def run_configuration_steps():
     app.storage.user["configured"] = True
 
 
-# def demo_configuration_dialog():
-#     with ui.dialog().props("position=right full-height") as dialog, ui.card().classes("relative bordered"):
-#         # with close button
-#         ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes("absolute right-2 top-2")
+def demo_configuration_dialog():
+    with ui.dialog().props("position=right full-height") as dialog, ui.card().classes("relative bordered"):
+        # with close button
+        ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes("absolute right-2 top-2")
 
-#         # save/restore the configuration
-#         with ui.row():
-#             ui.button(icon="download", on_click=config_show().open)
-#             ui.button(icon="upload", on_click=config_load().open)
+        # save/restore the configuration
+        with ui.row():
+            ui.button(icon="download", on_click=config_show().open)
+            ui.button(icon="upload", on_click=config_load().open)
 
-#         with ui.card_section():
-#             ui.label("Mount Path").classes("text-lg w-full")
-#             ui.label("to Global Namespace")
-#             with ui.row().classes("w-full place-items-center mt-4"):
-#                 ui.button("List cluster root", on_click=lambda: run_command_with_dialog(f"ls -lA /mapr")).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
-#                 ui.button("Remount", on_click=lambda: run_command_with_dialog(f"([ -d /mapr ] && umount -l /mapr) || mkdir /mapr; mount -t nfs4 -o nolock,soft {app.storage.user.get('MAPR_HOST', '')}:/mapr /mapr")).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
-#                 # ui.button("Volumes", on_click=create_volumes).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
-#                 # ui.button("Streams", on_click=create_streams).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
-#                 # ui.button("Tables", on_click=create_tables).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
+        with ui.card_section():
+            ui.label("Mount Path").classes("text-lg w-full")
+            ui.label("to Global Namespace")
+            with ui.row().classes("w-full place-items-center mt-4"):
+                ui.button("List cluster root", on_click=lambda: run_command_with_dialog(f"ls -lA /mapr")).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
+                ui.button("Remount", on_click=lambda: run_command_with_dialog(f"([ -d /mapr ] && umount -l /mapr) || mkdir /mapr; mount -t nfs4 -o nolock,soft {app.storage.user.get('HQ_HOST', '127.0.0.1')}:/mapr /mapr")).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
+                # ui.button("Volumes", on_click=create_volumes).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
+                # ui.button("Streams", on_click=create_streams).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
+                # ui.button("Tables", on_click=create_tables).bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
 
-#         ui.separator()
-#         with ui.card_section():
-#             ui.label("Clean up!").classes("text-lg")
-#             ui.label("Use when done with the demo. This will remove all volumes and streams, ALL DATA will be gone!").classes("text-sm text-italic")
-#             ui.button("DELETE ALL!", on_click=delete_volumes_and_streams, color="negative").classes("mt-4").bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
+        ui.separator()
+        with ui.card_section():
+            ui.label("Clean up!").classes("text-lg")
+            ui.label("Use when done with the demo. This will remove all volumes and streams, ALL DATA will be gone!").classes("text-sm text-italic")
+            ui.button("DELETE ALL!", on_click=delete_volumes, color="negative").classes("mt-4").bind_enabled_from(app.storage.user, "busy", backward=lambda x: not x)
 
-#     dialog.on("close", lambda d=dialog: d.delete())
-#     dialog.open()
-
-
-# def config_show():
-#     with ui.dialog() as config_show, ui.card().classes("grow"):
-#         ui.code(json.dumps(app.storage.user, indent=2), language="json").classes("w-full text-wrap")
-#         with ui.row().classes("w-full"):
-#             ui.button(
-#                 "Save",
-#                 icon="save",
-#                 on_click=lambda: ui.download("/config"),
-#             )
-#             ui.space()
-#             ui.button(
-#                 "Close",
-#                 icon="cancel",
-#                 on_click=config_show.close,
-#             )
-#     return config_show
+    dialog.on("close", lambda d=dialog: d.delete())
+    dialog.open()
 
 
-# def config_load():
-#     with ui.dialog() as config_load, ui.card().classes("grow"):
-#         ui.upload(label="Config JSON", auto_upload=True, on_upload=lambda e: config_save(e.content.read().decode("utf-8"), config_load)).classes(
-#             "max-w-full"
-#         ).props("accept='application/json' hide-upload-btn")
-
-#     return config_load
-
-
-# def config_save(val: str, dialog):
-#     try:
-#         for key, value in json.loads(val.replace("\n", "")).items():
-#             app.storage.user[key] = value
-#         dialog.close()
-#         ui.notify("Settings loaded", type="positive")
-#         ui.notify("Refresh the page!!", type="error")
-#     except (TypeError, json.decoder.JSONDecodeError, ValueError) as error:
-#         ui.notify("Not a valid json", type="negative")
-#         logger.warning(error)
+def config_show():
+    with ui.dialog() as config_show, ui.card().classes("grow"):
+        ui.code(json.dumps(app.storage.user, indent=2), language="json").classes("w-full text-wrap")
+        with ui.row().classes("w-full"):
+            ui.button(
+                "Save",
+                icon="save",
+                on_click=lambda: ui.download("/config"),
+            )
+            ui.space()
+            ui.button(
+                "Close",
+                icon="cancel",
+                on_click=config_show.close,
+            )
+    return config_show
 
 
-# @app.get("/config")
-# def download(content: str = None):
-#     # by default downloading settings
-#     if content is None:
-#         content = app.storage.user
+def config_load():
+    with ui.dialog() as config_load, ui.card().classes("grow"):
+        ui.upload(label="Config JSON", auto_upload=True, on_upload=lambda e: config_save(e.content.read().decode("utf-8"), config_load)).classes(
+            "max-w-full"
+        ).props("accept='application/json' hide-upload-btn")
 
-#     string_io = io.StringIO(json.dumps(content))  # create a file-like object from the string
+    return config_load
 
-#     headers = {"Content-Disposition": "attachment; filename=config.json"}
-#     return StreamingResponse(string_io, media_type="text/plain", headers=headers)
+
+def config_save(val: str, dialog):
+    try:
+        for key, value in json.loads(val.replace("\n", "")).items():
+            app.storage.user[key] = value
+        dialog.close()
+        ui.notify("Settings loaded", type="positive")
+        ui.notify("Refresh the page!!", type="error")
+    except (TypeError, json.decoder.JSONDecodeError, ValueError) as error:
+        ui.notify("Not a valid json", type="negative")
+        logger.warning(error)
+
+
+@app.get("/config")
+def download(content: str = None):
+    # by default downloading settings
+    if content is None:
+        content = app.storage.user
+
+    string_io = io.StringIO(json.dumps(content))  # create a file-like object from the string
+
+    headers = {"Content-Disposition": "attachment; filename=config.json"}
+    return StreamingResponse(string_io, media_type="text/plain", headers=headers)

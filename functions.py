@@ -2,13 +2,15 @@ import inspect
 import logging
 import os
 import textwrap
+import urllib.parse
 import httpx
 from nicegui import app, run
 import requests
+import urllib
 from common import *
 from helpers import *
 
-logger = logging.getLogger()
+logger = logging.getLogger("functions")
 
 async def run_command_with_dialog(command: str) -> None:
     """
@@ -59,6 +61,7 @@ def get_cluster_name(key: str):
     else:
         return None
 
+
 async def create_volumes(host: str, volumes: list):
     """
     Create an app folder and create volumes in it
@@ -73,7 +76,7 @@ async def create_volumes(host: str, volumes: list):
 
         URL = f"https://{host}:8443/rest/volume/create?name={volname}&path={vol}&replication=1&minreplication=1&nsreplication=1&nsminreplication=1"
 
-        logger.debug("REST call to: %s", URL)
+        # logger.debug("REST call to: %s", URL)
 
         try:
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
@@ -89,6 +92,7 @@ async def create_volumes(host: str, volumes: list):
                         ui.notify(f"{res['messages'][0]}", type='positive')
                     elif res['status'] == "ERROR":
                         ui.notify(f"{res['errors'][0]['desc']}", type='warning')
+                        logger.warning("REST failed for create volume: %s on %s: %s", vol, host, res['errors'][0]['desc'])
 
         except Exception as error:
             logger.warning("Failed to connect %s!", URL)
@@ -96,6 +100,48 @@ async def create_volumes(host: str, volumes: list):
             logger.debug(error)
             app.storage.user['busy'] = False
             return False
+
+    app.storage.user['busy'] = False
+    return True
+
+
+async def create_mirror_volume(hqclustername: str, edgehost: str, source: str, dest: str) -> bool:
+    """
+    Create a volume on the edge cluster to replicate a volume on the HQ cluster.
+    """
+
+    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
+
+    app.storage.user['busy'] = True
+
+    volname = dest.split("/")[-1]
+
+    URL = f"https://{edgehost}:8443/rest/volume/create?name={volname}&path={dest}&type=mirror&source={source.split('/')[-1]}@{hqclustername}"
+
+    # logger.debug("REST call to: %s", URL)
+
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            response = await client.post(URL, auth=auth)
+
+            if response is None or response.status_code != 200:
+                logger.warning("REST failed for create mirror volume %s on %s", dest, edgehost)
+                logger.warning("Response: %s", response.text)
+
+            else:
+                res = response.json()
+                if res['status'] == "OK":
+                    ui.notify(f"{res['messages'][0]}", type='positive')
+                elif res['status'] == "ERROR":
+                    ui.notify(f"{res}", type='warning')
+                    logger.warning("REST failed to create volume for URL %s: %s", URL, res)
+
+    except Exception as error:
+        logger.warning("Failed to connect %s", URL)
+        ui.notify(f"Failed to connect to REST endpoint for mirror volume creation.", type='negative')
+        logger.error(error, exc_info=True)
+        app.storage.user['busy'] = False
+        return False
 
     app.storage.user['busy'] = False
     return True
@@ -109,7 +155,7 @@ async def create_tables(host: str, tables: list):
         try:
             # Create table
             async with httpx.AsyncClient(verify=False) as client:
-                URL = f"https://{host}:8443/rest/table/create?path={table}&tabletype=json&defaultreadperm=p&defaultwriteperm=p&defaultappendperm=p&defaultunmaskedreadperm=p"
+                URL = f"https://{host}:8443/rest/table/create?path={urllib.parse.quote_plus(table)}&tabletype=json&defaultreadperm=p&defaultwriteperm=p&defaulttraverseperm=p&defaultunmaskedreadperm=p"
                 response = await client.post(
                     url=URL,
                     auth=auth
@@ -128,28 +174,7 @@ async def create_tables(host: str, tables: list):
                         ui.notify(f"Table \"{table}\" created", type='positive')
                     elif res['status'] == "ERROR":
                         ui.notify(f"Table: \"{table}\": {res['errors'][0]['desc']}", type='warning')
-
-            # Create Column Family
-            async with httpx.AsyncClient(verify=False) as client:
-                URL = f"https://{host}:8443/rest/table/cf/create?path={table}&cfname=cf1"
-                response = await client.post(
-                    url=URL,
-                    auth=auth
-                )
-
-                # logger.debug(response.json())
-
-                if response is None or response.status_code != 200:
-                    # possibly not an issue if table already exists
-                    logger.warning("REST failed for create table: %s on %s", table, host)
-                    logger.warning("Response: %s", response.text)
-
-                else:
-                    res = response.json()
-                    if res['status'] == "OK":
-                        ui.notify(f"Column Family created for table in {table}", type='positive')
-                    elif res['status'] == "ERROR":
-                        ui.notify(f"Column Family failed for table in {table}: {res['errors'][0]['desc']}", type='warning')
+                        logger.warning("Error creating table %s: %s", table, res['errors'][0]['desc'])
 
         except Exception as error:
             logger.warning("Failed to connect %s: %s", URL, error)
@@ -194,35 +219,51 @@ async def create_streams(host: str, streams: list):
     return True
 
 
-async def delete_volumes_and_streams(cluster: str, volumes: list):
+async def delete_volumes():
     """
-    Delete all streams and volumes for a cluster.
-    params:
-    cluster - the name of the cluster to delete from, either "HQ" or "EDGE"
-    volumes - a list of volume names to delete
+    Delete volumes for both clusters, removing the streams and tables in them.
     """
-
-    host = app.storage.user[cluster]["ip"]
-    auth = (app.storage.user[cluster + "_USER"], app.storage.user[cluster + "_PASS"])
 
     app.storage.user['busy'] = True
+    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
 
-    for vol in volumes:
+    # Remove HQ volume
+    host = app.storage.user["HQ"]["ip"]
+    volname = HQ_VOLUME_PATH.split("/")[-1]
+    URL = f"https://{host}:8443/rest/volume/remove?name={volname}"
+    async with httpx.AsyncClient(verify=False) as client:
+        response = await client.post(URL, auth=auth)
 
-        URL = f"https://{app.storage.user[host]}:8443/rest/volume/remove?name={vol}"
-        async with httpx.AsyncClient(verify=False) as client:
-            response = await client.post(URL, auth=auth)
+        if response is None or response.status_code != 200:
+            logger.warning("REST failed for delete volume: %s", volname)
+            logger.warning("Response: %s", response.text)
 
-            if response is None or response.status_code != 200:
-                logger.warning("REST failed for delete volume: %s", vol)
-                logger.warning("Response: %s", response.text)
+        else:
+            res = response.json()
+            if res['status'] == "OK":
+                ui.notify(f"Volume '{volname}' deleted", type='warning')
+            elif res['status'] == "ERROR":
+                ui.notify(f"{volname}: {res['errors'][0]['desc']}", type='warning')
+                logger.warning("Error response for delete volume %s: %s", volname, res['errors'][0]['desc'])
 
-            else:
-                res = response.json()
-                if res['status'] == "OK":
-                    ui.notify(f"Volume '{vol}' deleted", type='warning')
-                elif res['status'] == "ERROR":
-                    ui.notify(f"{vol}: {res['errors'][0]['desc']}", type='warning')
+    # Remove Edge volume
+    host = app.storage.user["EDGE"]["ip"]
+    volname = EDGE_VOLUME_PATH.split("/")[-1]
+    URL = f"https://{host}:8443/rest/volume/remove?name={volname}"
+    async with httpx.AsyncClient(verify=False) as client:
+        response = await client.post(URL, auth=auth)
+
+        if response is None or response.status_code != 200:
+            logger.warning("REST failed for delete volume: %s", volname)
+            logger.warning("Response: %s", response.text)
+
+        else:
+            res = response.json()
+            if res['status'] == "OK":
+                ui.notify(f"Volume '{volname}' deleted", type='warning')
+            elif res['status'] == "ERROR":
+                ui.notify(f"{volname}: {res['errors'][0]['desc']}", type='warning')
+                logger.warning("Error response for delete volume %s: %s", volname, res['errors'][0]['desc'])
 
     app.storage.user['busy'] = False
 
@@ -283,7 +324,7 @@ async def prepare_core():
     # HQ resources
     await run.io_bound(run_command, f"maprcli volume create -name {HQ_VOLUME_PATH} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     await run.io_bound(run_command, f"maprcli table create -path {HQ_VOLUME_PATH}/{HQ_IMAGETABLE} -tabletype json")
-    await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_LOCAL} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
+    await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
     await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
     await run.io_bound(run_command, f"maprcli volume create -name {HQ_MISSION_FILES} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH}/{HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
     app.storage.user["busy"] = False

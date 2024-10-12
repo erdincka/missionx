@@ -17,7 +17,7 @@ HQ_VOLUME_PATH = "/apps/missionX"
 
 EDGE_VOLUME_PATH = "/apps/missionX-edge"
 
-STREAM_LOCAL = "pipelineStream"
+STREAM_PIPELINE = "pipelineStream"
 HQ_STREAM_REPLICATED = "replicatedStream"
 EDGE_STREAM_REPLICATED = "missionX.replicatedStream"
 
@@ -29,8 +29,8 @@ TOPIC_ASSET_REQUEST = "ASSET_REQUEST"
 TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
 NASA_FEED_FILE = "meta/query_results_combined-USE.json"
 IMAGE_FILE_LOCATION = "downloadedAssets"
-HQ_MISSION_FILES = "files"
-EDGE_MISSION_FILES = "missionX.files"
+HQ_MISSION_FILES = f"{HQ_VOLUME_PATH}/files"
+EDGE_MISSION_FILES = f"{EDGE_VOLUME_PATH}/files.mirror"
 
 # timeout stream consumers
 MAX_POLL_TIME = 5
