@@ -19,7 +19,7 @@ async def run_command_with_dialog(command: str) -> None:
 
     with ui.dialog().props("full-width") as dialog, ui.card().classes("grow relative"):
         ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes("absolute right-2 top-2")
-        ui.label(f"Running: {command}").classes("text-bold")
+        ui.label(f"Running: {textwrap.shorten(command, width=80)}").classes("text-bold")
         result = ui.log().classes("w-full mt-2").style("white-space: pre-wrap")
 
     dialog.on("close", lambda d=dialog: d.delete())
@@ -61,6 +61,13 @@ def get_cluster_name(key: str):
     else:
         return None
 
+
+def get_volume_name(volume: str) -> str:
+    """
+    Get the name of a volume from its full path.
+    """
+    return os.path.basename(os.path.normpath(volume))
+    # or return volume.split('/')[-1]
 
 async def create_volumes(host: str, volumes: list):
     """
@@ -116,7 +123,7 @@ async def create_mirror_volume(hqclustername: str, edgehost: str, source: str, d
 
     volname = dest.split("/")[-1]
 
-    URL = f"https://{edgehost}:8443/rest/volume/create?name={volname}&path={dest}&type=mirror&source={source.split('/')[-1]}@{hqclustername}"
+    URL = f"https://{edgehost}:8443/rest/volume/create?name={volname}&path={dest}&type=mirror&source={get_volume_name(source)}@{hqclustername}"
 
     # logger.debug("REST call to: %s", URL)
 
@@ -319,28 +326,37 @@ async def delete_volumes():
 #     command= f"""selected=$(grep {dest} /opt/mapr/conf/mapr-clusters.conf); others=$(grep -v {dest} /opt/mapr/conf/mapr-clusters.conf); echo "$selected\n$others" > /opt/mapr/conf/mapr-clusters.conf"""
 #     run_command(command)
 
-async def prepare_core():
-    app.storage.user["busy"] = True
+def prepare_core():
+    # These commands (or rather their REST API equivalents) are already run with the initial cluster configuration dialog. You can use them as reference.
     # HQ resources
-    await run.io_bound(run_command, f"maprcli volume create -name {HQ_VOLUME_PATH} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    await run.io_bound(run_command, f"maprcli table create -path {HQ_VOLUME_PATH}/{HQ_IMAGETABLE} -tabletype json")
-    await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
-    await run.io_bound(run_command, f"maprcli stream create -path {HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p")
-    await run.io_bound(run_command, f"maprcli volume create -name {HQ_MISSION_FILES} -cluster {os.environ['MAPR_CLUSTER']} -path {HQ_VOLUME_PATH}/{HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    app.storage.user["busy"] = False
+    return f"""
+    maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_VOLUME_PATH)} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1
+    maprcli table create -path /mapr/{get_cluster_name('HQ')}{HQ_IMAGETABLE} -tabletype json
+    maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p
+    maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p
+    maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_MISSION_FILES)} -path {HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1
+    """
 
 
-async def prepare_edge():
-    app.storage.user["busy"] = True
+def prepare_edge():
+    # These commands (or rather their REST API equivalents) are already run with the initial cluster configuration dialog. You can use them as reference.
     # Edge resources
-    await run.io_bound(run_command, f"/opt/mapr/server/configure.sh -c -C {os.environ['EDGE_IP']}:7222 -N {os.environ['EDGE_CLUSTER']}")
-    await run.io_bound(run_command, f"echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {os.environ['EDGE_CLUSTER']} -user {app.storage.user['MAPR_USER']}")
-    await run.io_bound(run_command, f"maprcli volume create -type mirror -name {EDGE_MISSION_FILES} -cluster {os.environ['EDGE_CLUSTER']} -path {EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{os.environ['MAPR_CLUSTER']} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1")
-    app.storage.user["busy"] = False
+    # 1. Connect to the edge cluster from the client machine.
+    # 2. Set authorisation ticket for the edge cluster
+    # 3. Create a mirror volume on the edge cluster.
+    return f"""
+    /opt/mapr/server/configure.sh -c -C {app.storage.user['EDGE_HOST']}:7222 -N {get_cluster_name('EDGE')} -secure
+    echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {get_cluster_name('EDGE')} -user {app.storage.user['MAPR_USER']}
+    maprcli volume create -type mirror -name {get_volume_name(EDGE_MISSION_FILES)} -cluster {get_cluster_name('EDGE')} -path {EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{get_cluster_name('HQ')} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1
+    """
 
 
 def toggle_service(prop: str):
-    app.storage.general["services"][prop] = not app.storage.general["services"].get(prop, False)
+    if app.storage.general['services'][prop]:
+        app.storage.general["services"][prop] = False
+    else:
+        app.storage.general["services"][prop] = True
+        ##### FIND THE SERVICE AND RUN IT - OR START ALL SERVICES AT STARTUP
 
 
 def toggle_debug(val: bool):
@@ -351,17 +367,20 @@ def toggle_debug(val: bool):
 
 
 def service_status(service: tuple):
+    # Add if services are not set up yet
+    if "services" not in app.storage.general: app.storage.general["services"] = {}
     name, _ = service
     prop = name.lower().replace(" ", "")
 
     if prop not in app.storage.general["services"]:
         app.storage.general["services"][prop] = False
 
-    with ui.item(on_click=lambda n=prop: toggle_service(n)).bind_enabled_from(app.storage.general["services"], prop).classes("text-xs m-1 p-1 border"):
+    with ui.item(on_click=lambda n=prop: toggle_service(n)).classes("text-xs"): #.bind_enabled_from(app.storage.general["services"], prop)
         with ui.item_section():
             ui.item_label(name).classes("no-wrap")
         with ui.item_section().props('side'):
-            ui.label().bind_text_from(app.storage.general["services"], prop, backward=lambda x: "Started" if x else "Stopped")
+            # ui.label().bind_text_from(app.storage.general["services"], prop, backward=lambda x: "Started" if x else "Stopped")
+            ui.icon("fa-solid fa-circle-question fa-xs").bind_name_from(app.storage.general["services"], prop, backward=lambda x: "fa-solid fa-circle-check fa-xs" if x else "fa-solid fa-circle-xmark fa-xs")
 
 
 def service_counter(service: tuple):
@@ -441,8 +460,8 @@ def dashboard_tiles(host: str, source: str):
 
 # create replica stream from HQ to Edge
 async def stream_replica_setup():
-    source_stream_path = f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
-    target_stream_path = f"{EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"
+    source_stream_path = HQ_STREAM_REPLICATED
+    target_stream_path = EDGE_STREAM_REPLICATED
 
     logger.debug("Starting replication to %s", target_stream_path)
     REST_URL = f"https://{os.environ['MAPR_IP']}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{os.environ['EDGE_CLUSTER']}{target_stream_path}&multimaster=true"
@@ -472,7 +491,7 @@ async def toggle_replication():
     """
     toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
 
-    REST_URL = f"https://{os.environ['EDGE_IP']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}&replica={HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
+    REST_URL = f"https://{app.storage.user['EDGE_HOST']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_STREAM_REPLICATED}&replica={HQ_STREAM_REPLICATED}"
 
     try:
         response = requests.get(url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)

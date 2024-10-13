@@ -21,7 +21,7 @@ We are using pre-recorded images from 2014, but we can also get them in real-tim
 For each message we recieve, we will create a record in the JSON Table and
 send a message to the pipeline to inform the next service, Image Download, so it can process the message content.
 """,
-            "code": extract_wrapped(nasa_feed_service),
+            "code": nasa_feed_service,
             "function": nasa_feed_service,
         },
         {
@@ -79,4 +79,3 @@ and save the image in a volume, while updating the location of the asset in the 
         },
     ]
 }
-

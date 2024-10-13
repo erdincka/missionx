@@ -6,6 +6,7 @@ from helpers import *
 from common import *
 import steps
 
+@ui.page("/edge_dashboard", title="Edge Dashboard")
 def edge_page():
     # Edge Dashboard
     with ui.row().classes("w-full no-wrap place-items-center"):

@@ -12,16 +12,15 @@ DEMO = {
 
 MOUNT_PATH = "/mapr"
 
-# HQ_VOLUME_NAME = "missionX"
 HQ_VOLUME_PATH = "/apps/missionX"
 
 EDGE_VOLUME_PATH = "/apps/missionX-edge"
 
 STREAM_PIPELINE = "pipelineStream"
-HQ_STREAM_REPLICATED = "replicatedStream"
-EDGE_STREAM_REPLICATED = "missionX.replicatedStream"
+HQ_STREAM_REPLICATED = f"{HQ_VOLUME_PATH}/replicatedStream"
+EDGE_STREAM_REPLICATED = f"{EDGE_VOLUME_PATH}/missionX.replicatedStream"
 
-HQ_IMAGETABLE = "imagesTable"
+HQ_IMAGETABLE = f"{HQ_VOLUME_PATH}/imagesTable"
 TOPIC_NASAFEED = "NASAFEED"
 TOPIC_IMAGE_DOWNLOAD = "IMAGE_DOWNLOAD"
 TOPIC_ASSET_BROADCAST = "ASSET_BROADCAST"

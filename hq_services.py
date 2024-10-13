@@ -6,8 +6,9 @@ from uuid import uuid4
 import importlib_resources
 from nicegui import app
 from files import putfile
-from functions import run_command
+from functions import get_cluster_name, run_command
 from helpers import *
+from common import *
 from streams import consume, produce
 from tables import find_document_by_id, upsert_document
 
@@ -15,15 +16,17 @@ logger = logging.getLogger()
 
 # HQ SERVICES
 
-@fire_and_forget
+# @fire_and_forget
 def nasa_feed_service():
     """
-    Simulate recieving events from NASA API, send random notification messages every NASA_FEED_INTERVAL seconds to TOPIC_NASAFEED, 
+    Simulate recieving events from NASA API, send random notification messages every NASA_FEED_INTERVAL seconds to TOPIC_NASAFEED,
     and save notification message into TABLE
     """
 
-    stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
-    table_path = f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"
+    stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
+    table_path = HQ_IMAGETABLE
+
+    logger.info("Starting NASA feed service")
 
     # load mock feed data from file
     input_data = None
@@ -34,6 +37,8 @@ def nasa_feed_service():
         "r",
     ) as f:
         input_data = json.load(f)
+
+    logger.debug("NASA feed data: %s", input_data)
 
     # notify user
     app.storage.general["services"]["nasafeed"] = True
@@ -46,10 +51,11 @@ def nasa_feed_service():
     while True:
         # skip if service is disabled by user
         if not app.storage.general["services"].get("nasafeed", False):
-            logger.debug("disabled")
-            break
+            logger.debug("NASA Feed service is disabled")
+            sleep(app.storage.general.get('nasafeed_delay', 1.0))
+            continue
 
-        logger.debug("running...")
+        logger.debug("NASA Feed service is running...")
         count = random.randrange(5) + 1
 
         # pick "count" random items
@@ -101,8 +107,8 @@ def image_download_service():
     Update TABLE with new download location and publish an event to notify downloaded/failed image to TOPIC_IMAGE_DOWNLOADED
     """
 
-    stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
-    table_path = f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"
+    stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
+    table_path = HQ_IMAGETABLE
 
     input_topic = TOPIC_NASAFEED
     output_topic = TOPIC_IMAGE_DOWNLOAD
@@ -149,7 +155,7 @@ def image_download_service():
                     # put file to downloadLocation
                     response = putfile(
                         host=os.environ["MAPR_IP"],
-                        file=f"images/{imageFilename}", 
+                        file=f"images/{imageFilename}",
                         destfolder=IMAGE_FILE_LOCATION
                     )
 
@@ -198,8 +204,8 @@ def asset_broadcast_service():
     Subscribe to IMAGE_DOWNLOAD topic and publish to ASSET_BROADCAST to notify edge clusters for new asset availability
     """
 
-    local_stream_path = f"{HQ_VOLUME_PATH}/{STREAM_LOCAL}"
-    replicated_stream_path = f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
+    local_stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
+    replicated_stream_path = HQ_STREAM_REPLICATED
 
     input_topic = TOPIC_IMAGE_DOWNLOAD
     output_topic = TOPIC_ASSET_BROADCAST
@@ -264,8 +270,8 @@ def asset_response_service():
     Monitor ASSET_REQUEST topic for the requests from Edge
     """
 
-    stream_path = f"/mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"
-    table_path = f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"
+    stream_path = f"/mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED}"
+    table_path = HQ_IMAGETABLE
 
     input_topic = TOPIC_ASSET_REQUEST
 

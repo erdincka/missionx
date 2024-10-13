@@ -6,12 +6,17 @@ import importlib_resources
 from nicegui import ui, app
 
 from functions import *
+from hq import hq_page
 
 logger = logging.getLogger("page")
 
+ui.add_head_html('<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/css/fontawesome.min.css" rel="stylesheet">', shared=True)
+# <script src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/js/all.min.js"></script>
+ui.add_body_html('<script src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/js/all.min.js" integrity="sha256-qq1ob4lpAizCQs1tkv5gttMXUlgpiHyvG3JcCIktRvs=" crossorigin="anonymous"></script>', shared=True)
+ui.add_body_html('<script src="https://cdn.jsdelivr.net/npm/grommet-icons@4.12.1/utils.min.js"></script>', shared=True)
 
 @ui.page('/')
-def index():
+async def index():
     # Reset previous run state if it was hang
     app.storage.user["busy"] = False
 
@@ -47,40 +52,40 @@ def index():
     ui.separator()
 
     # Prepare
-    # with ui.expansion("Set up the demo environment", icon="engineering", caption="Prepare the cluster for the demo").classes("w-full text-bold") as setup_page:
+    with ui.expansion("Set up the demo environment", icon="engineering", caption="Prepare the cluster for the demo").classes("w-full text-bold") as setup_page:
 
-    #     ui.label("Create the volumes, topics and tables at the HQ cluster.")
+        ui.label("Create the volumes, topics and tables at the HQ cluster.")
 
-    #     ui.code(inspect.getsource(prepare_core)).classes("w-full")
+        ui.code(inspect.getsource(prepare_core)).classes("w-full")
 
-    #     ui.button("Run", on_click=prepare_core).bind_enabled_from(
-    #         app.storage.user, "busy", lambda x: not x
-    #     )
+        ui.button("Run", on_click=lambda: run_command_with_dialog(prepare_core())).bind_enabled_from(
+            app.storage.user, "busy", lambda x: not x
+        )
 
-    #     ui.space()
+        ui.space()
 
-    #     ui.label("Create the volume at the Edge cluster.")
+        ui.label("Create the volume at the Edge cluster.")
 
-    #     ui.code(inspect.getsource(prepare_edge)).classes("w-full")
+        ui.code(inspect.getsource(prepare_edge)).classes("w-full")
 
-    #     ui.button("Run", on_click=prepare_edge).bind_enabled_from(
-    #         app.storage.user, "busy", lambda x: not x
-    #     )
+        ui.button("Run", on_click=lambda: run_command_with_dialog(prepare_edge())).bind_enabled_from(
+            app.storage.user, "busy", lambda x: not x
+        )
 
-    #     ui.space()
 
-    #     ui.label("We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.")
+        # ui.space()
 
-    #     ui.code(inspect.getsource(stream_replica_setup)).classes("w-full")
+        # ui.label("We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.")
 
-    #     ui.button("Run", on_click=stream_replica_setup).bind_enabled_from(
-    #         app.storage.user, "busy", lambda x: not x
-    #     )
+        # ui.code(inspect.getsource(stream_replica_setup)).classes("w-full")
 
-    # setup_page.bind_value(app.storage.general["ui"], "setup")
+        # ui.button("Run", on_click=stream_replica_setup).bind_enabled_from(
+        #     app.storage.user, "busy", lambda x: not x
+        # )
 
     # ui.separator()
 
+    hq_page()
     # with ui.splitter(limits=(25,75)) as site_panels:
     #     with site_panels.before:
     #         hq_page()
@@ -273,8 +278,8 @@ async def run_configuration_steps():
         elif step["name"] == "createvolumes":
             step["status"] = "run_circle"
             if await create_volumes(app.storage.user["HQ_HOST"], [HQ_VOLUME_PATH, HQ_MISSION_FILES]) \
-                and await create_tables(app.storage.user["HQ_HOST"], [f"{HQ_VOLUME_PATH}/{HQ_IMAGETABLE}"]) \
-                and await create_streams(app.storage.user["HQ_HOST"], [f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}", f"{HQ_VOLUME_PATH}/{HQ_STREAM_REPLICATED}"]) \
+                and await create_tables(app.storage.user["HQ_HOST"], [HQ_IMAGETABLE]) \
+                and await create_streams(app.storage.user["HQ_HOST"], [f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}", f"{HQ_STREAM_REPLICATED}"]) \
                 and await create_volumes(app.storage.user["EDGE_HOST"], [EDGE_VOLUME_PATH]) \
                 and await create_mirror_volume(get_cluster_name("HQ"), app.storage.user["EDGE_HOST"], HQ_MISSION_FILES, EDGE_MISSION_FILES):
                 # These should be created later on demo steps
