@@ -19,7 +19,6 @@ logger = logging.getLogger("main")
 
 app_init()
 
-
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
         title=TITLE,

@@ -1,15 +1,15 @@
 
 import logging
-import os
 import pathlib
 import importlib_resources
 import requests
 
+from common import HQ_VOLUME_PATH
 from helpers import *
 
 logger = logging.getLogger()
 
-def putfile(host: str, file: str, destfolder: str, *args, **kwargs):
+def putfile(host: str, user: str, password: str, file: str, destfolder: str, *args, **kwargs):
     """
     PUT request to Admin REST API at /files.
     args and kwargs for requests.put.
@@ -27,7 +27,7 @@ def putfile(host: str, file: str, destfolder: str, *args, **kwargs):
         with open(filepath, "rb") as f:
             response = requests.put(
                 url=REST_URL,
-                auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]),
+                auth=(user, password),
                 verify=False,
                 data=f,
                 timeout=5,
@@ -43,7 +43,7 @@ def putfile(host: str, file: str, destfolder: str, *args, **kwargs):
 
 
 # Get file from destination
-def getfile(host: str, filepath: str, *args, **kwargs):
+def getfile(host: str, user: str, password: str, filepath: str, *args, **kwargs):
     """
     GET request to Admin REST API at /files.
     args and kwargs for requests.get.
@@ -54,7 +54,7 @@ def getfile(host: str, filepath: str, *args, **kwargs):
     try:
         response = requests.get(
             url=REST_URL,
-            auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]),
+            auth=(user, password),
             verify=False,
             timeout=5,
             *args,

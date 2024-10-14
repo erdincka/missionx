@@ -4,6 +4,7 @@ import socket
 
 import requests
 
+from common import *
 from files import getfile
 from helpers import *
 from nicegui import app
@@ -13,7 +14,6 @@ from streams import consume, produce
 
 logger = logging.getLogger()
 
-@fire_and_forget
 def audit_listener_service():
     """
     Listens the auditlogstream to see if upstream replication is established.
@@ -63,7 +63,6 @@ def audit_listener_service():
         sleep(app.storage.general.get("auditlistener_delay", 1.0))
 
 
-@fire_and_forget
 def upstream_comm_service():
     app.storage.general["services"]["upstreamcomm"] = True
 
@@ -156,7 +155,6 @@ def upstream_comm_service():
         sleep(app.storage.general.get("upstreamcomm_delay", 1.0))
 
 
-@fire_and_forget
 def broadcast_listener_service():
     """
     Process messages in ASSET_BROADCAST topic
@@ -202,7 +200,6 @@ def broadcast_listener_service():
         sleep(app.storage.general.get("broadcastlistener_delay", 1.0))
 
 
-@fire_and_forget
 def asset_request_service():
     """
     Request assets by reading from queue and putting them to the replicated stream on ASSET_REQUEST topic
@@ -265,7 +262,6 @@ def make_asset_request(asset: dict):
             a["status"] = "requesting..."
 
 
-@fire_and_forget
 def asset_viewer_service():
     app.storage.general["services"]["assetviewer"] = True
 
@@ -284,7 +280,12 @@ def asset_viewer_service():
 
             filepath = f"{EDGE_VOLUME_PATH}/{EDGE_MISSION_FILES}/{asset['filename']}"
 
-            response = getfile(os.environ['EDGE_IP'], filepath)
+            response = getfile(
+                host=app.storage.user['EDGE_HOST'],
+                user=app.storage.user["MAPR_USER"],
+                password=app.storage.user["MAPR_PASS"],
+                filepath=filepath
+            )
 
             if response and response.status_code == 200:
                 logger.debug("Found asset file: %s", asset['filename'])

@@ -1,9 +1,9 @@
 import logging
-import os
 from mapr.ojai.storage.ConnectionFactory import ConnectionFactory
-from nicegui import app
 
-logger = logging.getLogger()
+logger = logging.getLogger("tables")
+
+connection = None
 
 def get_cert_domain():
     with open("/opt/mapr/conf/ssl_truststore.pem", 'r') as f:
@@ -13,21 +13,23 @@ def get_cert_domain():
 
     return ""
 
-def get_connection(host: str):
+def get_connection(host: str, user: str, password: str):
+
+    if connection is not None: return connection
     ### FIX: bruteforce cert validation
     domain = get_cert_domain()
 
-    # Create a connection to data access server
-    connection_str = f"{host}:5678?auth=basic;user={app.storage.user['MAPR_USER']};password={app.storage.user['MAPR_PASS']};" \
+    # Create a connection to data access gateway
+    connection_str = f"{host}:5678?auth=basic;user={user};password={password};" \
             "ssl=true;" \
             "sslCA=/opt/mapr/conf/ssl_truststore.pem;" \
             f"sslTargetNameOverride=client.{domain}"
 
     return ConnectionFactory.get_connection(connection_str=connection_str)
 
-def upsert_document(host: str, table: str, json_dict: dict):
+def upsert_document(host: str, user: str, password: str, table: str, json_dict: dict):
     try:
-        connection = get_connection(host=host)
+        connection = get_connection(host=host, user=user, password=password)
 
         store = connection.get_store(table)
 
@@ -46,12 +48,12 @@ def upsert_document(host: str, table: str, json_dict: dict):
 
     return True
 
-def find_document_by_id(host: str, table: str, docid: str):
+def find_document_by_id(host: str, user: str, password: str, table: str, docid: str):
 
     doc = None
 
     try:
-        connection = get_connection(host)
+        connection = get_connection(host=host, user=user, password=password)
 
         # Get a store and assign it as a DocumentStore object
         store = connection.get_store(table)

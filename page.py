@@ -11,9 +11,7 @@ from hq import hq_page
 logger = logging.getLogger("page")
 
 ui.add_head_html('<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/css/fontawesome.min.css" rel="stylesheet">', shared=True)
-# <script src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/js/all.min.js"></script>
 ui.add_body_html('<script src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/js/all.min.js" integrity="sha256-qq1ob4lpAizCQs1tkv5gttMXUlgpiHyvG3JcCIktRvs=" crossorigin="anonymous"></script>', shared=True)
-ui.add_body_html('<script src="https://cdn.jsdelivr.net/npm/grommet-icons@4.12.1/utils.min.js"></script>', shared=True)
 
 @ui.page('/')
 async def index():
@@ -21,20 +19,22 @@ async def index():
     app.storage.user["busy"] = False
 
     # and ui counters & settings
-    # for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
-    #     name, delay = svc
-    #     prop = name.lower().replace(' ', '')
-    #     app.storage.general[f"{prop}_count"] = 0
-    #     app.storage.general[f"{prop}_delay"] = delay
-    # app.storage.general["tile_remove"] = 20
+    for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
+        name, delay = svc
+        prop = name.lower().replace(' ', '')
+        if f"{prop}_count" not in app.storage.general.keys(): app.storage.general[f"{prop}_count"] = 0
+        if f"{prop}_delay" not in app.storage.general.keys(): app.storage.general[f"{prop}_delay"] = delay
+    if "tile_remove" not in app.storage.general.keys(): app.storage.general["tile_remove"] = 20
 
     # # and image lists
+    if "dashboard_hq" not in app.storage.general: app.storage.general["dashboard_hq"] = []
+    if "dashboard_edge" not in app.storage.general: app.storage.general["dashboard_edge"] = []
     # app.storage.general["dashboard_hq"] = []
     # app.storage.general["dashboard_edge"] = []
 
     # # and connectivity status
-    # app.storage.general["stream_replication"] = ""
-    # app.storage.general["volume_replication"] = ""
+    if "stream_replication" not in app.storage.general.keys(): app.storage.general["stream_replication"] = ""
+    if "volume_replication" not in app.storage.general.keys(): app.storage.general["volume_replication"] = ""
 
     # Header
     header(title=TITLE)
@@ -95,7 +95,7 @@ async def index():
     # ui.separator()
 
     logging_card().classes(
-        "flex-grow shrink absolute bottom-0 left-0 w-full opacity-50 hover:opacity-100"
+        "flex-grow shrink absolute sticky bottom-0 left-0 w-full opacity-50 hover:opacity-100"
     )
 
     footer()
@@ -107,10 +107,7 @@ def header(title: str):
 
         ui.label(title)
 
-        ui.switch("Go Live").props("color=accent").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, "clusterinfo", backward=lambda x: x and len(x) > 0)
-
-        # ui.switch("Monitor", on_change=lambda x: toggle_monitoring(x.value)).props("color=accent").bind_visibility_from(app.storage.user, 'demo_mode')
-
+        ui.switch("Live").props("checked-icon=check, unchecked-icon=clear").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, "HQ", backward=lambda x: x and len(x) > 0)
         ui.space()
 
         with ui.row().classes("place-items-center"):

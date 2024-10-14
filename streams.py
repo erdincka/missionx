@@ -7,7 +7,7 @@ from common import MAX_POLL_TIME
 
 logger = logging.getLogger("streams")
 
-def produce(cluster: str, stream: str, topic: str, record: str):
+def produce(stream: str, topic: str, record: str):
     from confluent_kafka import Producer
 
     p = Producer({"streams.producer.default.stream": stream})
@@ -26,7 +26,7 @@ def produce(cluster: str, stream: str, topic: str, record: str):
     return True
 
 
-def consume(cluster: str, stream: str, topic: str):
+def consume(stream: str, topic: str):
     from confluent_kafka import Consumer, KafkaError
 
     consumer = Consumer(

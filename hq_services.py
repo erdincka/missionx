@@ -12,12 +12,11 @@ from common import *
 from streams import consume, produce
 from tables import find_document_by_id, upsert_document
 
-logger = logging.getLogger()
+logger = logging.getLogger("hq_services")
 
 # HQ SERVICES
 
-# @fire_and_forget
-def nasa_feed_service():
+def nasa_feed_service(host: str, user: str, password: str):
     """
     Simulate recieving events from NASA API, send random notification messages every NASA_FEED_INTERVAL seconds to TOPIC_NASAFEED,
     and save notification message into TABLE
@@ -38,70 +37,67 @@ def nasa_feed_service():
     ) as f:
         input_data = json.load(f)
 
-    logger.debug("NASA feed data: %s", input_data)
+    # logger.debug("NASA feed data: %s", input_data)
 
     # notify user
     app.storage.general["services"]["nasafeed"] = True
 
     items = input_data["collection"]["items"]
-    logger.info("Loaded %d messages for NASA Feed", len(items))
+    logger.debug("Loaded %d messages for NASA Feed", len(items))
 
-    output_topic_name = f"{stream_path}:{TOPIC_NASAFEED}"
+    output_topic_path = f"{stream_path}:{TOPIC_NASAFEED}"
 
-    while True:
-        # skip if service is disabled by user
-        if not app.storage.general["services"].get("nasafeed", False):
-            logger.debug("NASA Feed service is disabled")
-            sleep(app.storage.general.get('nasafeed_delay', 1.0))
-            continue
+    # skip if service is disabled by user
+    if not app.storage.general["services"].get("nasafeed", False):
+        logger.debug("is disabled")
+        return
 
-        logger.debug("NASA Feed service is running...")
-        count = random.randrange(5) + 1
+    logger.debug("is running...")
+    count = random.randrange(5) + 1
 
-        # pick "count" random items
-        for item in random.sample(items, count):
-            # assign a unique ID for table
-            item["_id"] = str(uuid4().hex[:12])
+    # pick "count" random items
+    for item in random.sample(items, count):
+        # assign a unique ID for table
+        item["_id"] = str(uuid4().hex[:12])
 
-            if upsert_document(host=os.environ['MAPR_IP'], table=table_path, json_dict=item):
+        if upsert_document(host=host, user=user, password=password, table=table_path, json_dict=item):
 
-                logger.info(
-                    "Event notification from NASA: %s",
-                    item["data"][0]["title"]
-                )
+            logger.info(
+                "Event notification from NASA: %s",
+                item["data"][0]["title"]
+            )
 
-            else:
-                logger.warning("Saving event notification failed for %s", item['data'][0]['title'])
+        else:
+            logger.warning("Saving event notification failed for %s", item['data'][0]['title'])
 
-            # push message to pipeline stream
-            message = {
-                "title": item["data"][0]["title"],
-                "description": item["data"][0]["description"],
-                "tablename": table_path.split("/").pop(),
-                "assetID": item["_id"],
-                "messageCreatorID": "ezshow",
-            }
-            if produce(cluster=os.environ['MAPR_CLUSTER'], stream=stream_path, topic=TOPIC_NASAFEED, record=json.dumps(message)):
-                logger.info("Published image received event to %s", output_topic_name)
-                # notify ui that we have new message
-                app.storage.general["nasafeed_count"] = app.storage.general.get("nasafeed_count", 0) + 1
-                # and update dashboard tiles with new message
-                app.storage.general["dashboard_hq"].append(
-                    tuple(["NASA Feed Service", f"Asset: {message['assetID']}", "New asset available from NASA", None])
-                )
+        # push message to pipeline stream
+        message = {
+            "title": item["data"][0]["title"],
+            "description": item["data"][0]["description"],
+            "tablename": table_path.split("/").pop(),
+            "assetID": item["_id"],
+            "messageCreatorID": "ezshow",
+        }
+        if produce(stream=stream_path, topic=TOPIC_NASAFEED, record=json.dumps(message)):
+            logger.info("Published image received event to %s", output_topic_path)
+            # notify ui that we have new message
+            app.storage.general["nasafeed_count"] = app.storage.general.get("nasafeed_count", 0) + 1
+            # update dashboard tiles with new message
+            app.storage.general["dashboard_hq"].append(
+                tuple(["NASA Feed Service", f"Asset: {message['assetID']}", "New asset available from NASA", None])
+            )
 
-            else:
-                logger.warning("Publish failed for assetID %s", message['assetID'])
+        else:
+            logger.warning("Publish failed for assetID %s", message['assetID'])
 
-            # add random delay between events (0 to 1 sec)
-            sleep(random.random())
+        # add random delay between events (0 to 1 sec)
+        sleep(random.random())
 
-        # add delay to publishing
-        sleep(app.storage.general.get('nasafeed_delay', 1.0))
+    # add delay to publishing
+    # sleep(app.storage.general.get('nasafeed_delay', 1.0))
 
 
-@fire_and_forget
-def image_download_service():
+def image_download_service(host: str, user: str, password: str):
     """
     Subscribe to TOPIC_NASAFEED and download/save assets (images) for published events into IMAGE_FILE_LOCATION
     Update TABLE with new download location and publish an event to notify downloaded/failed image to TOPIC_IMAGE_DOWNLOADED
@@ -116,89 +112,87 @@ def image_download_service():
     app.storage.general["services"]["imagedownload"] = True
     logger.debug("started...")
 
-    while True:
-        # skip if service is disabled by user
-        if not app.storage.general["services"].get("imagedownload", False):
-            logger.debug("disabled")
-            break
+    # skip if service is disabled by user
+    if not app.storage.general["services"].get("imagedownload", False):
+        logger.debug("is disabled")
+        return
 
-        logger.debug("running...")
-        downloaded = 0
-        failed = 0
+    logger.debug("is running...")
 
-        for msg in consume(cluster=os.environ["MAPR_CLUSTER"], stream=stream_path, topic=input_topic):
-            try:
-                record: dict = json.loads(msg)
-                logger.debug("Received: %s", record)
+    downloaded = 0
+    failed = 0
 
-                doc = find_document_by_id(host=os.environ["MAPR_IP"], table=table_path, docid=record["assetID"])
-                logger.debug("Found: %s", str(doc))
+    for msg in consume(stream=stream_path, topic=input_topic):
+        try:
+            record: dict = json.loads(msg)
+            logger.debug("Received: %s", record)
 
-                if doc is None:
-                    logger.warning("Asset not found for: %s", record["assetID"])
-                    failed += 1
+            doc = find_document_by_id(host=host, user=user, password=password, table=table_path, docid=record["assetID"])
+            logger.debug("Found: %s", str(doc))
 
-                else:
-                    # lazily get the last part of href - should be the filename
-                    assetUrl = doc["links"][0]["href"]
-                    imageFilename = assetUrl.split("/").pop()
+            if doc is None:
+                logger.warning("Asset not found for: %s", record["assetID"])
+                failed += 1
 
-                    logger.info("Downloading asset for %s", doc['data'][0]['title'])
+            else:
+                # lazily get the last part of href - should be the filename
+                assetUrl = doc["links"][0]["href"]
+                imageFilename = assetUrl.split("/").pop()
 
-                    newMessage = {
-                        "title": doc["data"][0]["title"],
-                        "description": doc["data"][0]["description"],
-                        "filename": imageFilename,
-                        "assetID": doc["_id"],
-                    }
+                logger.info("Downloading asset for %s", doc['data'][0]['title'])
 
-                    # put file to downloadLocation
-                    response = putfile(
-                        host=os.environ["MAPR_IP"],
-                        file=f"images/{imageFilename}",
-                        destfolder=IMAGE_FILE_LOCATION
+                newMessage = {
+                    "title": doc["data"][0]["title"],
+                    "description": doc["data"][0]["description"],
+                    "filename": imageFilename,
+                    "assetID": doc["_id"],
+                }
+
+                # put file to downloadLocation
+                response = putfile(
+                    host=host,
+                    user=user,
+                    password=password,
+                    file=f"images/{imageFilename}",
+                    destfolder=IMAGE_FILE_LOCATION
+                )
+
+                if response is not None:
+                    logger.debug(
+                        "Asset saved in folder %s/%s", HQ_VOLUME_PATH, IMAGE_FILE_LOCATION
                     )
 
-                    if response is not None:
-                        logger.debug(
-                            "Asset saved in folder %s/%s", HQ_VOLUME_PATH, IMAGE_FILE_LOCATION
+                    # update DB with new location
+                    doc["imageDownloadLocation"] = f"{HQ_VOLUME_PATH}/{IMAGE_FILE_LOCATION}/{imageFilename}"
+
+                    if upsert_document(host=host, user=user, password=password, table=table_path, json_dict=doc):
+                        logger.debug("Document updated with new location")
+                        newMessage['status'] = "success"
+                        downloaded += 1
+
+                    else:
+                        logger.warning("Failed to update document %s for asset location", doc['_id'])
+                        newMessage['status'] = "failed"
+                        failed += 1
+
+                    # Publish image saved message to output stream
+                    if produce(stream=stream_path, topic=output_topic, record=json.dumps(newMessage)):
+                        logger.debug("Published image download event to %s", f"{stream_path}:{output_topic}")
+                        # notify ui that we have new message
+                        app.storage.general["imagedownload_count"] = app.storage.general.get("imagedownload_count", 0) + 1
+                        # update dashboard with a tile
+                        app.storage.general["dashboard_hq"].append(
+                            tuple(["Image Download Service", doc['data'][0]['title'], doc['data'][0]['description'], doc["imageDownloadLocation"]])
                         )
+                    else:
+                        logger.warning("Publish to %s failed for %s", f"{stream_path}:{output_topic}", newMessage)
 
-                        # update DB with new location
-                        doc["imageDownloadLocation"] = f"{HQ_VOLUME_PATH}/{IMAGE_FILE_LOCATION}/{imageFilename}"
+        except Exception as error:
+            logger.warning(error)
 
-                        if upsert_document(host=os.environ["MAPR_IP"], table=table_path, json_dict=doc):
-                            logger.debug("Document updated with new location")
-                            newMessage['status'] = "success"
-                            downloaded += 1
-
-                        else:
-                            logger.warning("Failed to update document %s for asset location", doc['_id'])
-                            newMessage['status'] = "failed"
-                            failed += 1
-
-                        # Publish image saved message to output stream
-                        if produce(cluster=os.environ['MAPR_CLUSTER'], stream=stream_path, topic=output_topic, record=json.dumps(newMessage)):
-                            logger.debug("Published image download event to %s", f"{stream_path}:{output_topic}")
-                            # notify ui that we have new message
-                            app.storage.general["imagedownload_count"] = app.storage.general.get("imagedownload_count", 0) + 1
-                            # update dashboard with a tile
-                            app.storage.general["dashboard_hq"].append(
-                                tuple(["Image Download Service", doc['data'][0]['title'], doc['data'][0]['description'], doc["imageDownloadLocation"]])
-                            )
-                        else:
-                            logger.warning("Publish to %s failed for %s", f"{stream_path}:{output_topic}", newMessage)
-
-            except Exception as error:
-                logger.warning(error)
-
-        logger.debug("Image download service -> OK: %d, FAIL: %d", downloaded, failed)
-
-        # add delay to publishing
-        sleep(app.storage.general.get("imagedownload_delay", 1.0))
+    logger.debug("FINISHED -> OK: %d, FAIL: %d", downloaded, failed)
 
 
-@fire_and_forget
 def asset_broadcast_service():
     """
     Subscribe to IMAGE_DOWNLOAD topic and publish to ASSET_BROADCAST to notify edge clusters for new asset availability
@@ -213,106 +207,92 @@ def asset_broadcast_service():
     app.storage.general["services"]["assetbroadcast"] = True
     logger.debug("started...")
 
-    while True:
-        # skip if service is disabled by user
-        if not app.storage.general["services"].get("assetbroadcast", False):
-            logger.debug("disabled")
-            break
+    # skip if service is disabled by user
+    if not app.storage.general["services"].get("assetbroadcast", False):
+        logger.debug("is disabled")
 
-        logger.debug("running...")
+    logger.debug("is running...")
 
-        for msg in consume(cluster=os.environ["MAPR_CLUSTER"], stream=local_stream_path, topic=input_topic):
-            record = json.loads(msg)
-            logger.debug("Received: %s", record)
+    for msg in consume(stream=local_stream_path, topic=input_topic):
+        record = json.loads(msg)
+        logger.debug("Received: %s", record)
 
-            # skip assets that failed to download
-            if record["status"] == "failed":
-                logger.warning("Record has failed, not publishing: %s", record["status"])
-                continue
+        # skip assets that failed to download
+        if record["status"] == "failed":
+            logger.warning("Record has failed, not publishing: %s", record["status"])
+            continue
 
-            try:
-                # Publish to output topic on the replicated stream
-                if produce(
-                    cluster=os.environ['MAPR_CLUSTER'], stream=replicated_stream_path, topic=output_topic, record=json.dumps(record)
-                ):
-                    # update message status
-                    record["status"] = "broadcast"
+        try:
+            # Publish to output topic on the replicated stream
+            if produce(
+                stream=replicated_stream_path, topic=output_topic, record=json.dumps(record)
+            ):
+                # update message status
+                record["status"] = "broadcast"
 
-                    logger.info(
-                        "Published asset to %s", f"{replicated_stream_path}:{output_topic}"
-                    )
-                    # notify ui that we have new message
-                    app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
-                    # update dashboard with a tile
-                    app.storage.general["dashboard_hq"].append(
-                        tuple(["Asset Broadcast Service", f"Broadcasting: , {record['assetID']}", record['title'], None])
-                    )
-                else:
-                    # update message status
-                    record["status"] = "failed"
+                logger.info(
+                    "Published asset to %s", f"{replicated_stream_path}:{output_topic}"
+                )
+                # notify ui that we have new message
+                app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
+                # update dashboard with a tile
+                app.storage.general["dashboard_hq"].append(
+                    tuple(["Asset Broadcast Service", f"Broadcasting: , {record['assetID']}", record['title'], None])
+                )
+            else:
+                # update message status
+                record["status"] = "failed"
 
-                    logger.warning(
-                        "Publish to %s failed for %s",
-                        f"{replicated_stream_path}:{output_topic}",
-                        record,
-                    )
+                logger.warning(
+                    "Publish to %s failed for %s",
+                    f"{replicated_stream_path}:{output_topic}",
+                    record,
+                )
 
-            except Exception as error:
-                logger.warning(error)
-
-        # add delay to publishing
-        sleep(app.storage.general.get("assetbroadcast_delay", 1.0))
+        except Exception as error:
+            logger.warning(error)
 
 
-@fire_and_forget
-def asset_response_service():
+def asset_response_service(host: str, user: str, password: str):
     """
     Monitor ASSET_REQUEST topic for the requests from Edge
     """
 
-    stream_path = f"/mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED}"
+    stream_path = HQ_STREAM_REPLICATED
     table_path = HQ_IMAGETABLE
 
     input_topic = TOPIC_ASSET_REQUEST
 
     app.storage.general["services"]["assetresponse"] = True
-    logger.debug("started...")
+    logger.debug("is started...")
 
-    while True:
-        # skip if service is disabled by user
-        if not app.storage.general["services"].get("assetresponse", False):
-            logger.debug("disabled")
-            break
+    # skip if service is disabled by user
+    if not app.storage.general["services"].get("assetresponse", False):
+        logger.debug("is disabled")
 
-        logger.debug("running...")
+    logger.debug("is running...")
 
-        for msg in consume(cluster=os.environ["MAPR_CLUSTER"], stream=stream_path, topic=input_topic):
-            record = json.loads(msg)
-            logger.info("Responding to asset request for: %s", record['title'])
+    for msg in consume(stream=stream_path, topic=input_topic):
+        record = json.loads(msg)
+        logger.info("Responding to asset request for: %s", record['title'])
 
-            doc = find_document_by_id(host=os.environ["MAPR_IP"], table=table_path, docid=record["assetID"])
-            logger.debug("Found: %s", str(doc))
+        doc = find_document_by_id(host=host, user=user, password=password, table=table_path, docid=record["assetID"])
+        logger.debug("Found: %s", str(doc))
 
-            if doc is None:
-                logger.warning("Asset not found for: %s", record['assetID'])
+        if doc is None:
+            logger.warning("Asset not found for: %s", record['assetID'])
 
-            else:
-                logger.info("Copying asset from %s", doc["imageDownloadLocation"])
-                # FIX: workaround to select the correct cluster
-                # switch_cluster_to(os.environ['MAPR_CLUSTER'])
-                # copy file to replicated volume
-                run_command(
-                    f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_VOLUME_PATH}/{HQ_MISSION_FILES}"
-                )
-                logger.info("%s sent to mission volume", doc['imageDownloadLocation'])
-                # notify ui that we have new message
-                app.storage.general["assetresponse_count"] = (
-                    app.storage.general.get("assetresponse_count", 0) + 1
-                )
-                # update dashboard with a tile
-                app.storage.general["dashboard_hq"].append(
-                    tuple(["Asset Response Service", f"Processing: {record['assetID']}", record['title'], None])
-                )
-
-        # add delay to publishing
-        sleep(app.storage.general.get("assetresponse_delay", 1.0))
+        else:
+            logger.info("Copying asset from %s", doc["imageDownloadLocation"])
+            run_command(
+                f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_MISSION_FILES}"
+            )
+            logger.info("%s sent to mission volume", doc['imageDownloadLocation'])
+            # notify ui that we have new message
+            app.storage.general["assetresponse_count"] = (
+                app.storage.general.get("assetresponse_count", 0) + 1
+            )
+            # update dashboard with a tile
+            app.storage.general["dashboard_hq"].append(
+                tuple(["Asset Response Service", f"Processing: {record['assetID']}", record['title'], None])
+            )

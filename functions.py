@@ -69,6 +69,7 @@ def get_volume_name(volume: str) -> str:
     return os.path.basename(os.path.normpath(volume))
     # or return volume.split('/')[-1]
 
+
 async def create_volumes(host: str, volumes: list):
     """
     Create an app folder and create volumes in it
@@ -236,41 +237,46 @@ async def delete_volumes():
 
     # Remove HQ volume
     host = app.storage.user["HQ"]["ip"]
-    volname = HQ_VOLUME_PATH.split("/")[-1]
-    URL = f"https://{host}:8443/rest/volume/remove?name={volname}"
-    async with httpx.AsyncClient(verify=False) as client:
-        response = await client.post(URL, auth=auth)
+    volname = get_volume_name(HQ_VOLUME_PATH)
+    replicated_volname = get_volume_name(HQ_MISSION_FILES)
+    for volume in [replicated_volname, volname]:
 
-        if response is None or response.status_code != 200:
-            logger.warning("REST failed for delete volume: %s", volname)
-            logger.warning("Response: %s", response.text)
+        URL = f"https://{host}:8443/rest/volume/remove?name={volume}"
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(URL, auth=auth)
 
-        else:
-            res = response.json()
-            if res['status'] == "OK":
-                ui.notify(f"Volume '{volname}' deleted", type='warning')
-            elif res['status'] == "ERROR":
-                ui.notify(f"{volname}: {res['errors'][0]['desc']}", type='warning')
-                logger.warning("Error response for delete volume %s: %s", volname, res['errors'][0]['desc'])
+            if response is None or response.status_code != 200:
+                logger.warning("REST failed for delete volume: %s", volume)
+                logger.warning("Response: %s", response.text)
+
+            else:
+                res = response.json()
+                if res['status'] == "OK":
+                    ui.notify(f"Volume '{volume}' deleted", type='warning')
+                elif res['status'] == "ERROR":
+                    ui.notify(f"{volume}: {res['errors'][0]['desc']}", type='warning')
+                    logger.warning("Error response for delete volume %s: %s", volume, res['errors'][0]['desc'])
 
     # Remove Edge volume
     host = app.storage.user["EDGE"]["ip"]
-    volname = EDGE_VOLUME_PATH.split("/")[-1]
-    URL = f"https://{host}:8443/rest/volume/remove?name={volname}"
-    async with httpx.AsyncClient(verify=False) as client:
-        response = await client.post(URL, auth=auth)
+    volname = get_volume_name(EDGE_VOLUME_PATH)
+    replicated_volname = get_volume_name(EDGE_MISSION_FILES)
+    for volume in [replicated_volname, volname]:
+        URL = f"https://{host}:8443/rest/volume/remove?name={volume}"
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(URL, auth=auth)
 
-        if response is None or response.status_code != 200:
-            logger.warning("REST failed for delete volume: %s", volname)
-            logger.warning("Response: %s", response.text)
+            if response is None or response.status_code != 200:
+                logger.warning("REST failed for delete volume: %s", volume)
+                logger.warning("Response: %s", response.text)
 
-        else:
-            res = response.json()
-            if res['status'] == "OK":
-                ui.notify(f"Volume '{volname}' deleted", type='warning')
-            elif res['status'] == "ERROR":
-                ui.notify(f"{volname}: {res['errors'][0]['desc']}", type='warning')
-                logger.warning("Error response for delete volume %s: %s", volname, res['errors'][0]['desc'])
+            else:
+                res = response.json()
+                if res['status'] == "OK":
+                    ui.notify(f"Volume '{volume}' deleted", type='warning')
+                elif res['status'] == "ERROR":
+                    ui.notify(f"{volume}: {res['errors'][0]['desc']}", type='warning')
+                    logger.warning("Error response for delete volume %s: %s", volume, res['errors'][0]['desc'])
 
     app.storage.user['busy'] = False
 
@@ -383,15 +389,25 @@ def service_status(service: tuple):
             ui.icon("fa-solid fa-circle-question fa-xs").bind_name_from(app.storage.general["services"], prop, backward=lambda x: "fa-solid fa-circle-check fa-xs" if x else "fa-solid fa-circle-xmark fa-xs")
 
 
-def service_counter(service: tuple):
+def service_counter(service: tuple, offset: int = 0):
     name, _ = service
     prop = name.lower().replace(" ", "")
-
-    with ui.item().classes("text-xs m-1 p-1 border"):
-        with ui.item_section():
-            ui.item_label(f"{name.split(' ')[1]} processed").classes("no-wrap")
-        with ui.item_section().props('side'):
-            ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
+    return {
+        'name': prop,
+        'value': app.storage.general[f'{prop}_count'],
+        'title': {
+            'offsetCenter': ['0%', f'{offset}%']
+        },
+        'detail': {
+            'valueAnimation': True,
+            'offsetCenter': ['0%', f'{offset + 20}%']
+        }
+    }
+    # with ui.item().classes("text-xs m-1 p-1 border"):
+    #     with ui.item_section():
+    #         ui.item_label(f"{name.split(' ')[1]} processed").classes("no-wrap")
+    #     with ui.item_section().props('side'):
+    #         ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
 
 
 def service_settings(service: tuple):
@@ -404,58 +420,6 @@ def service_settings(service: tuple):
             slider = ui.slider(min=2, max=10).bind_value(app.storage.general, f"{prop}_delay")
         with ui.item_section().props('side'):
             ui.label().bind_text_from(slider, 'value')
-
-
-# return image to display on UI
-def dashboard_tiles(host: str, source: str):
-    """
-    host:
-    source: string of key in app.storage.general, hq_dashboard | edge_dashboard, contains: list[DashboardTile]
-    """
-
-    BGCOLORS = {
-        "NASA Feed Service": "bg-sky-300",
-        "Image Download Service": "bg-red-300",
-        "Asset Broadcast Service": "bg-green-300",
-        "Asset Response Service": "bg-orange-300",
-        "Upstream Comm Service": "bg-amber-300",
-        "Broadcast Listener Service": "bg-emerald-300",
-        "Asset Request Service": "bg-lime-300",
-        "Asset Viewer Service": "bg-stone-300",
-    }
-
-    if source in app.storage.general and len(app.storage.general[source]) > 0:
-        service, title, description, imageUrl = app.storage.general.get(source, []).pop()
-
-        logger.debug("Process tile for service: %s, title: %s, description: %s, and imageurl: %s", service, title, description, imageUrl)
-
-        if service == "Asset Viewer Service" or service == "Image Download Service":
-            with ui.card().classes("h-80").props("bordered").tight() as img:
-                with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
-                    ui.label(service)
-                # TODO: use /mapr mount
-                ui.image(f"https://{app.storage.user['MAPR_USER']}:{app.storage.user['MAPR_PASS']}@{host}:8443/files{imageUrl}")
-                ui.space()
-                with ui.card_section():
-                    ui.label(textwrap.shorten(title, 32)).classes("text-sm")
-
-            img.on("click", lambda h=host,t=title,d=description,u=imageUrl: show_image(h,t,d,u))
-            if service == "Image Download Service": # auto remove tiles if not asset viewer
-                ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
-
-        else:
-            with ui.card().classes("h-80").props("bordered") as img:
-                with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
-                    ui.label(service)
-                with ui.card_section().classes("text-sm"):
-                    ui.label(textwrap.shorten(description, 64))
-                ui.space()
-                with ui.card_section().classes("text-sm"):
-                    ui.label(textwrap.shorten(title, 32))
-
-            ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
-
-        return img
 
 
 # create replica stream from HQ to Edge
@@ -521,3 +485,54 @@ def show_image(host: str, title: str, description: str, imageUrl: str):
 
     show.on("close", show.clear)
     show.open()
+
+
+# return image to display on UI
+def dashboard_tiles(host: str, source: str):
+    """
+    host:
+    source: string of key in app.storage.general, hq_dashboard | edge_dashboard, contains: list[DashboardTile]
+    """
+
+    # if source in app.storage.general and len(app.storage.general[source]) > 0:
+    # Return an image card if available
+    if len(app.storage.general[source]) > 0:
+        service, title, description, imageUrl = app.storage.general.get(source, []).pop()
+        logger.debug("Process tile for service: %s, title: %s, description: %s, and imageurl: %s", service, title, description, imageUrl)
+
+        if service == "Asset Viewer Service" or service == "Image Download Service":
+            with ui.card().classes("h-80 animate-fadeIn").props("bordered").tight() as img:
+                with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
+                    ui.label(service)
+                # TODO: use /mapr mount
+                ui.image(f"https://{app.storage.user['MAPR_USER']}:{app.storage.user['MAPR_PASS']}@{host}:8443/files{imageUrl}")
+                ui.space()
+                with ui.card_section():
+                    ui.label(textwrap.shorten(title, 32)).classes("text-sm")
+
+            img.on("click", lambda h=host,t=title,d=description,u=imageUrl: show_image(h,t,d,u))
+            if service == "Image Download Service": # auto remove tiles if not asset viewer
+                ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
+
+        else:
+            with ui.card().classes("h-80 animate-fadeIn").props("bordered") as img:
+                with ui.card_section().classes(f"w-full text-sm {BGCOLORS[service]}"):
+                    ui.label(service)
+                with ui.card_section().classes("text-sm"):
+                    ui.label(textwrap.shorten(description, 64))
+                ui.space()
+                with ui.card_section().classes("text-sm"):
+                    ui.label(textwrap.shorten(title, 32))
+
+            ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
+
+        return img
+
+def update_metrics_for(site: str, chart: ui.echart):
+    # update metrics charts
+    gaugeData = []
+    for idx, svc in enumerate(SERVICES[site]):
+        gaugeData.append(service_counter(svc, idx * 40 - 65))
+
+    chart.options['series'][0]['data'] = gaugeData
+    chart.update()

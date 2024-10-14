@@ -50,6 +50,18 @@ SERVICES = {
     ],
 }
 
+BGCOLORS = {
+    "NASA Feed Service": "bg-sky-300",
+    "Image Download Service": "bg-red-300",
+    "Asset Broadcast Service": "bg-green-300",
+    "Asset Response Service": "bg-orange-300",
+    "Upstream Comm Service": "bg-amber-300",
+    "Broadcast Listener Service": "bg-emerald-300",
+    "Asset Request Service": "bg-lime-300",
+    "Asset Viewer Service": "bg-stone-300",
+}
+
+
 cluster_configuration_steps = [
     {
         "name": "clusterinfo",

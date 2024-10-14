@@ -8,12 +8,12 @@ logger = logging.getLogger("helpers")
 
 
 # wrapper to make sync calls async-like
-def fire_and_forget(f):
-    def wrapped(*args, **kwargs):
-        # return asyncio.get_event_loop().run_in_executor(None, f, *args, *[v for v in kwargs.values()])
-        return asyncio.new_event_loop().run_in_executor(None, f, *args, *[v for v in kwargs.values()])
+# def fire_and_forget(f):
+#     def wrapped(*args, **kwargs):
+#         # return asyncio.get_event_loop().run_in_executor(None, f, *args, *[v for v in kwargs.values()])
+#         return asyncio.new_event_loop().run_in_executor(None, f, *args, *[v for v in kwargs.values()])
 
-    return wrapped
+#     return wrapped
 
 class LogElementHandler(logging.Handler):
     """A logging handler that emits messages to a log element."""
@@ -36,7 +36,7 @@ def configure_logging():
     """
 
     logging.basicConfig(level=logging.DEBUG,
-                    format="%(asctime)s:%(levelname)s:%(name)s (%(funcName)s:%(lineno)d): %(message)s",
+                    format="%(asctime)s:%(levelname)s %(filename)s:%(lineno)d (%(funcName)s): %(message)s",
                     datefmt='%H:%M:%S')
 
     # during development
@@ -75,9 +75,9 @@ def gracefully_fail(exc: Exception):
 def not_implemented():
     ui.notify('Not implemented', type='warning')
 
-def extract_wrapped(decorated):
-    closure = (c.cell_contents for c in decorated.__closure__)
-    return next((c for c in closure if isinstance(c, FunctionType)), None)
+# def extract_wrapped(decorated):
+#     closure = (c.cell_contents for c in decorated.__closure__)
+#     return next((c for c in closure if isinstance(c, FunctionType)), None)
 
 def logging_card():
     # Realtime logging
