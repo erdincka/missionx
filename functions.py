@@ -389,25 +389,14 @@ def service_status(service: tuple):
             ui.icon("fa-solid fa-circle-question fa-xs").bind_name_from(app.storage.general["services"], prop, backward=lambda x: "fa-solid fa-circle-check fa-xs" if x else "fa-solid fa-circle-xmark fa-xs")
 
 
-def service_counter(service: tuple, offset: int = 0):
+def service_counter(service: tuple):
     name, _ = service
     prop = name.lower().replace(" ", "")
-    return {
-        'name': prop,
-        'value': app.storage.general[f'{prop}_count'],
-        'title': {
-            'offsetCenter': ['0%', f'{offset}%']
-        },
-        'detail': {
-            'valueAnimation': True,
-            'offsetCenter': ['0%', f'{offset + 20}%']
-        }
-    }
-    # with ui.item().classes("text-xs m-1 p-1 border"):
-    #     with ui.item_section():
-    #         ui.item_label(f"{name.split(' ')[1]} processed").classes("no-wrap")
-    #     with ui.item_section().props('side'):
-    #         ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
+    with ui.item().classes("text-xs m-1 p-1 border"):
+        with ui.item_section():
+            ui.item_label(f"{name.split(' ')[1]} processed").classes("no-wrap")
+        with ui.item_section().props('side'):
+            ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
 
 
 def service_settings(service: tuple):
@@ -423,16 +412,16 @@ def service_settings(service: tuple):
 
 
 # create replica stream from HQ to Edge
-async def stream_replica_setup():
+async def stream_replica_setup(hqhost: str, user: str, password: str, edge_clustername: str):
     source_stream_path = HQ_STREAM_REPLICATED
     target_stream_path = EDGE_STREAM_REPLICATED
 
     logger.debug("Starting replication to %s", target_stream_path)
-    REST_URL = f"https://{os.environ['MAPR_IP']}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{os.environ['EDGE_CLUSTER']}{target_stream_path}&multimaster=true"
+    URL = f"https://{hqhost}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{edge_clustername}{target_stream_path}&multimaster=true"
 
-    logger.debug("REST_URL: %s", REST_URL)
+    # logger.debug("REST_URL: %s", URL)
     try:
-        response = await run.io_bound(requests.get, url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)
+        response = await run.io_bound(requests.get, url=URL, auth=(user, password), verify=False)
         response.raise_for_status()
 
     except Exception as error:
@@ -446,8 +435,27 @@ async def stream_replica_setup():
 
 
 # Start volume mirror from edge
-async def mirror_volume():
-    await run.io_bound(run_command, f"maprcli volume mirror start -cluster {os.environ['EDGE_CLUSTER']} -name {EDGE_MISSION_FILES}")
+async def start_volume_mirroring(edgehost: str, user: str, password: str):
+    # await run.io_bound(run_command, f"maprcli volume mirror start -cluster {os.environ['EDGE_CLUSTER']} -name {EDGE_MISSION_FILES}")
+    mirror_volume = get_volume_name(EDGE_MISSION_FILES)
+
+    logger.debug("Starting volume mirror for %s", mirror_volume)
+    URL = f"https://{edgehost}:8443/rest/volume/mirror/start?name={mirror_volume}"
+
+    # logger.debug("REST_URL: %s", URL)
+    try:
+        response = await run.io_bound(requests.post, url=URL, auth=(user, password), verify=False)
+        response.raise_for_status()
+
+    except Exception as error:
+        logger.warning(error)
+
+    if response:
+        obj = response.json()
+        logger.info("Volume mirror response: %s", obj)
+    else:
+        logger.warning("Cannot start volume mirroring")
+
 
 
 async def toggle_replication():
@@ -527,12 +535,3 @@ def dashboard_tiles(host: str, source: str):
             ui.timer(app.storage.general.get("tile_remove", 20), img.delete, once=True)
 
         return img
-
-def update_metrics_for(site: str, chart: ui.echart):
-    # update metrics charts
-    gaugeData = []
-    for idx, svc in enumerate(SERVICES[site]):
-        gaugeData.append(service_counter(svc, idx * 40 - 65))
-
-    chart.options['series'][0]['data'] = gaugeData
-    chart.update()

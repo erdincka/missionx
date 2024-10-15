@@ -21,12 +21,12 @@ HQ_STREAM_REPLICATED = f"{HQ_VOLUME_PATH}/replicatedStream"
 EDGE_STREAM_REPLICATED = f"{EDGE_VOLUME_PATH}/missionX.replicatedStream"
 
 HQ_IMAGETABLE = f"{HQ_VOLUME_PATH}/imagesTable"
-TOPIC_NASAFEED = "NASAFEED"
+TOPIC_IMAGEFEED = "IMAGEFEED"
 TOPIC_IMAGE_DOWNLOAD = "IMAGE_DOWNLOAD"
 TOPIC_ASSET_BROADCAST = "ASSET_BROADCAST"
 TOPIC_ASSET_REQUEST = "ASSET_REQUEST"
 TOPIC_DASHBOARD_UPDATES = "DASHBOARD_MONITOR"
-NASA_FEED_FILE = "meta/query_results_combined-USE.json"
+IMAGE_FEED_FILE = "meta/query_results_combined-USE.json"
 IMAGE_FILE_LOCATION = "downloadedAssets"
 HQ_MISSION_FILES = f"{HQ_VOLUME_PATH}/files"
 EDGE_MISSION_FILES = f"{EDGE_VOLUME_PATH}/files.mirror"
@@ -37,12 +37,13 @@ MAX_POLL_TIME = 5
 # service name & processing delay in tuple
 SERVICES = {
     "HQ": [
-        ("NASA Feed", 5),
+        ("IMAGE Feed", 5),
         ("Image Download", 2),
         ("Asset Broadcast", 2),
         ("Asset Response", 2),
     ],
     "EDGE": [
+        ("Audit Listener", 3),
         ("Upstream Comm", 3),
         ("Broadcast Listener", 3),
         ("Asset Request", 3),
@@ -51,7 +52,7 @@ SERVICES = {
 }
 
 BGCOLORS = {
-    "NASA Feed Service": "bg-sky-300",
+    "IMAGE Feed Service": "bg-sky-300",
     "Image Download Service": "bg-red-300",
     "Asset Broadcast Service": "bg-green-300",
     "Asset Response Service": "bg-orange-300",
@@ -76,6 +77,11 @@ cluster_configuration_steps = [
     {
         "name": "createvolumes",
         "info": "Create application volumes and streams",
+        "status": "pending",
+    },
+    {
+        "name": "auditing",
+        "info": "Enable auditing for cluster and data operations",
         "status": "pending",
     }
 ]

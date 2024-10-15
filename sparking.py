@@ -51,7 +51,7 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
         StructField("media_type", StringType(), True),
         StructField("date_created", StringType(), True),
         StructField("title", StringType(), True),
-        StructField("nasa_id", StringType(), True),
+        StructField("image_id", StringType(), True),
         StructField("description", StringType(), True),
         StructField("thumbnail", StringType(), True),
     ])
@@ -71,7 +71,7 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
     #     "data[3] AS media_type",
     #     "data[4] AS date_created",
     #     "data[5] AS title",
-    #     "data[6] AS nasa_id",
+    #     "data[6] AS image_id",
     #     "data[7] AS description",
     #     "data[8] AS thumbnail",
     # )
@@ -79,10 +79,10 @@ def spark_kafka_consumer(host: str, stream: str, topic: str):
     yield df
 
     # # Define the Delta table path
-    # delta_table_path = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_NASAFEED}_delta"
+    # delta_table_path = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_IMAGEFEED}_delta"
 
     # # Define the checkpoint directory path
-    # checkpoint_dir = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_NASAFEED}_checkpoint"
+    # checkpoint_dir = f"file:///mapr/{os.environ['MAPR_CLUSTER']}/{HQ_VOLUME_PATH}/{TOPIC_IMAGEFEED}_checkpoint"
 
     # Write the stream to the Delta table with a processing time trigger
     query = df \

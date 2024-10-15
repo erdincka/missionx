@@ -69,7 +69,6 @@ def configure_logging():
 def gracefully_fail(exc: Exception):
     print("gracefully failing...")
     logger.exception(exc)
-    app.storage.user["busy"] = False
 
 
 def not_implemented():

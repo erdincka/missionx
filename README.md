@@ -28,7 +28,7 @@ Use the disconnected link icon to complete initial setup. This will require you 
 
 ### HQ Services
 
-First step of our data flow is the ingest data from simulated NASA Feed service. This service will select a few random messages on each run (every few seconds) from the pre-integrated set of files (which is taken from real NASA feed from 2014), and publishes them into the Pipeline stream as an available asset information. This message contains limited information (metadata) regarding the asset and provides a link to download the actual data (image/video).
+First step of our data flow is the ingest data from simulated IMAGE Feed service. This service will select a few random messages on each run (every few seconds) from the pre-integrated set of files (which is taken from real IMAGE feed from 2014), and publishes them into the Pipeline stream as an available asset information. This message contains limited information (metadata) regarding the asset and provides a link to download the actual data (image/video).
 
 Next service, Image Download Service, automatically picks up messages from the Pipeline stream, and attempts to download the actual asset data from the link in the message. This file will then be copied into the Ezmeral Data Fabric volume for persistence. Image Download Service will then update the message with a status code that indicates asset is ready to be broadcasted.
 

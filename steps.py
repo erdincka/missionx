@@ -1,9 +1,10 @@
+from functions import stream_replica_setup
 from hq_services import *
 from edge_services import *
 
 
 INTRO = """
-HQ acts as the hub for information flow in this scenario. It is where the data is collected from various sources (we simulate NASA feed),
+HQ acts as the hub for information flow in this scenario. It is where the data is collected from various sources (we simulate IMAGE feed),
 processed and distributed to various targets, including the field teams working at the edge, as actionable intelligence.
 Microservice status for Headquarters are shown above.
 You can pause/resume them on clicking their icon. The numbers indicate the processed items for each service.
@@ -15,13 +16,13 @@ FLOW = {
         {
             "title": "Data Ingestion",
             "description": """
-Let's start with generating sample data mocking RSS feed from NASA.
-We are using pre-recorded images from 2014, but we can also get them in real-time using the relevant NASA API calls.
+Let's start with generating sample data mocking RSS feed from IMAGE.
+We are using pre-recorded images from 2014, but we can also get them in real-time using the relevant IMAGE API calls.
 For each message we recieve, we will create a record in the JSON Table and
 send a message to the pipeline to inform the next service, Image Download, so it can process the message content.
 """,
-            "code": nasa_feed_service,
-            "function": nasa_feed_service,
+            "code": image_feed_service,
+            "function": image_feed_service,
         },
         {
             "title": "Data Processing (ETL)",
@@ -44,12 +45,12 @@ and save the image in a volume, while updating the location of the asset in the 
             "code": asset_response_service,
             "function": asset_response_service,
         },
-        # {
-        #     "title": "Enable stream replication",
-        #     "description": "We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.",
-        #     "code": stream_replica_setup,
-        #     "function": stream_replica_setup,
-        # },
+        {
+            "title": "Enable stream replication",
+            "description": "We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.",
+            "code": stream_replica_setup,
+            "function": stream_replica_setup,
+        },
     ],
     "EDGE": [
         {

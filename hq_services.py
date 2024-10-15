@@ -1,12 +1,11 @@
 import json
-import os
 import random
 from time import sleep
 from uuid import uuid4
 import importlib_resources
 from nicegui import app
 from files import putfile
-from functions import get_cluster_name, run_command
+from functions import run_command
 from helpers import *
 from common import *
 from streams import consume, produce
@@ -16,39 +15,39 @@ logger = logging.getLogger("hq_services")
 
 # HQ SERVICES
 
-def nasa_feed_service(host: str, user: str, password: str):
+def image_feed_service(host: str, user: str, password: str):
     """
-    Simulate recieving events from NASA API, send random notification messages every NASA_FEED_INTERVAL seconds to TOPIC_NASAFEED,
+    Simulate recieving events from IMAGE API, send random notification messages every IMAGE_FEED_INTERVAL seconds to TOPIC_IMAGEFEED,
     and save notification message into TABLE
     """
 
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
     table_path = HQ_IMAGETABLE
 
-    logger.info("Starting NASA feed service")
+    logger.info("is started.")
 
     # load mock feed data from file
     input_data = None
     with open(
         importlib_resources.files("main").joinpath(
-            NASA_FEED_FILE
+            IMAGE_FEED_FILE
         ),
         "r",
     ) as f:
         input_data = json.load(f)
 
-    # logger.debug("NASA feed data: %s", input_data)
+    # logger.debug("IMAGE feed data: %s", input_data)
 
     # notify user
-    app.storage.general["services"]["nasafeed"] = True
+    app.storage.general["services"]["imagefeed"] = True
 
     items = input_data["collection"]["items"]
-    logger.debug("Loaded %d messages for NASA Feed", len(items))
+    logger.debug("Loaded %d messages for IMAGE Feed", len(items))
 
-    output_topic_path = f"{stream_path}:{TOPIC_NASAFEED}"
+    output_topic_path = f"{stream_path}:{TOPIC_IMAGEFEED}"
 
     # skip if service is disabled by user
-    if not app.storage.general["services"].get("nasafeed", False):
+    if not app.storage.general["services"].get("imagefeed", False):
         logger.debug("is disabled")
         return
 
@@ -63,7 +62,7 @@ def nasa_feed_service(host: str, user: str, password: str):
         if upsert_document(host=host, user=user, password=password, table=table_path, json_dict=item):
 
             logger.info(
-                "Event notification from NASA: %s",
+                "Event notification from IMAGE: %s",
                 item["data"][0]["title"]
             )
 
@@ -78,13 +77,13 @@ def nasa_feed_service(host: str, user: str, password: str):
             "assetID": item["_id"],
             "messageCreatorID": "ezshow",
         }
-        if produce(stream=stream_path, topic=TOPIC_NASAFEED, record=json.dumps(message)):
+        if produce(stream=stream_path, topic=TOPIC_IMAGEFEED, record=json.dumps(message)):
             logger.info("Published image received event to %s", output_topic_path)
             # notify ui that we have new message
-            app.storage.general["nasafeed_count"] = app.storage.general.get("nasafeed_count", 0) + 1
+            app.storage.general["imagefeed_count"] = app.storage.general.get("imagefeed_count", 0) + 1
             # update dashboard tiles with new message
             app.storage.general["dashboard_hq"].append(
-                tuple(["NASA Feed Service", f"Asset: {message['assetID']}", "New asset available from NASA", None])
+                tuple(["IMAGE Feed Service", f"Asset: {message['assetID']}", "New asset available from IMAGE", None])
             )
 
         else:
@@ -94,23 +93,23 @@ def nasa_feed_service(host: str, user: str, password: str):
         sleep(random.random())
 
     # add delay to publishing
-    # sleep(app.storage.general.get('nasafeed_delay', 1.0))
+    # sleep(app.storage.general.get('imagefeed_delay', 1.0))
 
 
 def image_download_service(host: str, user: str, password: str):
     """
-    Subscribe to TOPIC_NASAFEED and download/save assets (images) for published events into IMAGE_FILE_LOCATION
+    Subscribe to TOPIC_IMAGEFEED and download/save assets (images) for published events into IMAGE_FILE_LOCATION
     Update TABLE with new download location and publish an event to notify downloaded/failed image to TOPIC_IMAGE_DOWNLOADED
     """
 
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
     table_path = HQ_IMAGETABLE
 
-    input_topic = TOPIC_NASAFEED
+    input_topic = TOPIC_IMAGEFEED
     output_topic = TOPIC_IMAGE_DOWNLOAD
 
     app.storage.general["services"]["imagedownload"] = True
-    logger.debug("started...")
+    logger.debug("is started")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("imagedownload", False):
@@ -205,7 +204,7 @@ def asset_broadcast_service():
     output_topic = TOPIC_ASSET_BROADCAST
 
     app.storage.general["services"]["assetbroadcast"] = True
-    logger.debug("started...")
+    logger.debug("is started")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("assetbroadcast", False):
@@ -264,7 +263,7 @@ def asset_response_service(host: str, user: str, password: str):
     input_topic = TOPIC_ASSET_REQUEST
 
     app.storage.general["services"]["assetresponse"] = True
-    logger.debug("is started...")
+    logger.debug("is started")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("assetresponse", False):

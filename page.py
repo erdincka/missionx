@@ -107,7 +107,7 @@ def header(title: str):
 
         ui.label(title)
 
-        ui.switch("Live").props("checked-icon=check, unchecked-icon=clear").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, "HQ", backward=lambda x: x and len(x) > 0)
+        ui.switch("Live").props("checked-icon=check unchecked-icon=clear").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, "HQ", backward=lambda x: x and len(x) > 0)
         ui.space()
 
         with ui.row().classes("place-items-center"):
@@ -266,8 +266,8 @@ async def run_configuration_steps():
             os.environ["CLUSTER_NAME"] = app.storage.user["HQ"]["name"]
             os.environ["MAPR_USER"] = app.storage.user["MAPR_USER"]
             os.environ["MAPR_PASS"] = app.storage.user["MAPR_PASS"]
-            # async for out in run_command("/bin/bash ./configure-maprclient.sh"):
-            #     logger.info(out.strip())
+            async for out in run_command("/bin/bash ./configure-maprclient.sh"):
+                logger.info(out.strip())
 
             step["status"] = "check"
 
@@ -284,6 +284,37 @@ async def run_configuration_steps():
                 # and await create_tables(app.storage.user["EDGE_HOST"], []) \
                 step["status"] = "check"
             else: step["status"] = "error"
+
+        # Step 4 - Enable auditing
+        elif step["name"] == "auditing":
+            step["status"] = "run_circle"
+            for cluster in "HQ", "EDGE": # enable auditing on both clusters
+                try:
+                    auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
+                    auditdata = {"mfs.enable.audit.as.stream":"1"}
+
+                    for URL in [f"https://{app.storage.user[cluster + '_HOST']}:8443/rest/audit/cluster?enabled=true",
+                                f"https://{app.storage.user[cluster + '_HOST']}:8443/rest/audit/data?enabled=true",
+                                f"https://{app.storage.user[cluster + '_HOST']}:8443/rest/config/save",
+                                ]:
+                        async with httpx.AsyncClient(verify=False) as client:
+                            response = await client.post(URL, auth=auth, data={"values" : auditdata} if "config/save" in URL else None)
+                            # logger.debug(response.text)
+
+                            if response is None or response.status_code != 200:
+                                logger.warning("Response: %s", response.text)
+                                step["status"] = "error"
+
+                            else:
+                                res = response.json()
+                                logger.debug(f"Set cluster audit resulted with: {res}")
+
+                except Exception as error:
+                    logger.error("Failed to enable auditing.")
+                    logger.info(error)
+                    step["status"] = "error"
+
+            step["status"] = "check"
 
         else: logger.debug("%s not defined", step["name"])
 
