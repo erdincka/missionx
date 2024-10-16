@@ -1,19 +1,8 @@
-import asyncio
 import logging
-import re
-from types import FunctionType
 from nicegui import ui, binding, app
 
-logger = logging.getLogger("helpers")
+logger = logging.getLogger(__name__)
 
-
-# wrapper to make sync calls async-like
-# def fire_and_forget(f):
-#     def wrapped(*args, **kwargs):
-#         # return asyncio.get_event_loop().run_in_executor(None, f, *args, *[v for v in kwargs.values()])
-#         return asyncio.new_event_loop().run_in_executor(None, f, *args, *[v for v in kwargs.values()])
-
-#     return wrapped
 
 class LogElementHandler(logging.Handler):
     """A logging handler that emits messages to a log element."""

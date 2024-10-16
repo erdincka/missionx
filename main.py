@@ -15,7 +15,7 @@ app.on_disconnect(app_init)
 # configure the logging
 configure_logging()
 
-logger = logging.getLogger("main")
+logger = logging.getLogger(__name__)
 
 app_init()
 

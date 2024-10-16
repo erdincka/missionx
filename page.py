@@ -5,32 +5,18 @@ import httpx
 import importlib_resources
 from nicegui import ui, app
 
+from edge import edge_page
 from functions import *
 from hq import hq_page
 
-logger = logging.getLogger("page")
+logger = logging.getLogger(__name__)
 
 ui.add_head_html('<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/css/fontawesome.min.css" rel="stylesheet">', shared=True)
 ui.add_body_html('<script src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/js/all.min.js" integrity="sha256-qq1ob4lpAizCQs1tkv5gttMXUlgpiHyvG3JcCIktRvs=" crossorigin="anonymous"></script>', shared=True)
 
 @ui.page('/')
 async def index():
-    # Reset previous run state if it was hang
-    # app.storage.user["busy"] = False
-
-    # and ui counters & settings
-    # for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
-    #     name, delay = svc
-    #     prop = name.lower().replace(' ', '')
-    #     if "services" not in app.storage.general: app.storage.general['services'] = {}
-    #     if prop not in app.storage.general["services"]: app.storage.general['services'][prop] = False
-    #     if f"{prop}_count" not in app.storage.general.keys(): app.storage.general[f"{prop}_count"] = 0
-    #     if f"{prop}_delay" not in app.storage.general.keys(): app.storage.general[f"{prop}_delay"] = delay
-    # if "tile_remove" not in app.storage.general.keys(): app.storage.general["tile_remove"] = 20
-
-    # # and connectivity status
-    # if "stream_replication" not in app.storage.general.keys(): app.storage.general["stream_replication"] = ""
-    # if "volume_replication" not in app.storage.general.keys(): app.storage.general["volume_replication"] = ""
+    if "tile_remove" not in app.storage.general.keys(): app.storage.general["tile_remove"] = 20
 
     # Header
     header(title=TITLE)
@@ -81,12 +67,12 @@ async def index():
 
     # ui.separator()
 
-    hq_page()
-    # with ui.splitter(limits=(25,75)) as site_panels:
-    #     with site_panels.before:
-    #         hq_page()
-    #     with site_panels.after:
-    #         edge_page()
+    # hq_page()
+    with ui.splitter(limits=(25,75)) as site_panels:
+        with site_panels.before:
+            hq_page()
+        with site_panels.after:
+            edge_page()
 
     # ui.separator()
 
@@ -103,7 +89,7 @@ def header(title: str):
 
         ui.label(title)
 
-        ui.switch("Live").props("checked-icon=check unchecked-icon=clear").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, "HQ", backward=lambda x: x and len(x) > 0)
+        ui.switch("Logs").props("checked-icon=check unchecked-icon=clear").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, HQ, backward=lambda x: x and len(x) > 0)
         ui.space()
 
         with ui.row().classes("place-items-center"):
@@ -113,8 +99,8 @@ def header(title: str):
                 new_tab=True
             ).classes(
                 "text-white hover:text-blue-600"
-            ).bind_text_from(app.storage.user, "HQ", backward=lambda x: x["name"] if x else "No HQ Cluster"
-            ).bind_visibility_from(app.storage.user, "HQ", backward=lambda x: x and len(x) > 0)
+            ).bind_text_from(app.storage.user, HQ, backward=lambda x: x["name"] if x else "No HQ Cluster"
+            ).bind_visibility_from(app.storage.user, HQ, backward=lambda x: x and len(x) > 0)
 
             # EDGE MCS link
             ui.link(
@@ -122,8 +108,8 @@ def header(title: str):
                 new_tab=True
             ).classes(
                 "text-white hover:text-blue-600"
-            ).bind_text_from(app.storage.user, "EDGE", backward=lambda x: x["name"] if x else "No HQ Cluster"
-            ).bind_visibility_from(app.storage.user, "EDGE", backward=lambda x: x and len(x) > 0)
+            ).bind_text_from(app.storage.user, EDGE, backward=lambda x: x["name"] if x else "No HQ Cluster"
+            ).bind_visibility_from(app.storage.user, EDGE, backward=lambda x: x and len(x) > 0)
 
             # Connect to a cluster
             # ui.label("Not configured!").classes("text-bold red").bind_visibility_from(app.storage.user, "cluster", backward=lambda x: not x or len(x) == 0)
@@ -157,16 +143,16 @@ def footer():
                 )
                 # Core folder
                 ui.button(
-                    "HQ",
+                    HQ,
                     on_click=lambda: run_command_with_dialog(
-                        f"ls -lA {MOUNT_PATH}/{get_cluster_name('HQ')}{HQ_VOLUME_PATH}"
+                        f"ls -lA {MOUNT_PATH}/{HQSite['clusterName']}{HQ_VOLUME_PATH}"
                     ),
                 )
                 # Volumes
                 ui.button(
-                    "Edge",
+                    EDGE,
                     on_click=lambda: run_command_with_dialog(
-                        f"ls -lAR {MOUNT_PATH}/{get_cluster_name('EDGE')}{EDGE_VOLUME_PATH}"
+                        f"ls -lAR {MOUNT_PATH}/{EdgeSite['clusterName']}{EDGE_VOLUME_PATH}"
                     ),
                 )
 
@@ -218,7 +204,7 @@ async def run_configuration_steps():
         if step["name"] == "clusterinfo":
             step["status"] = "run_circle"
 
-            for cluster in "HQ", "EDGE": # update app.storage with both cluster's clusterinfo
+            for cluster in HQ, EDGE: # update app.storage with both cluster's clusterinfo
                 try:
                     auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
                     URL = f"https://{app.storage.user[cluster + '_HOST']}:8443/rest/dashboard/info"
@@ -250,8 +236,8 @@ async def run_configuration_steps():
             step["status"] = "run_circle"
 
             # Run configuration for client only on HQ
-            os.environ["CLUSTER_IP"] = app.storage.user["HQ"]["ip"]
-            os.environ["CLUSTER_NAME"] = app.storage.user["HQ"]["name"]
+            os.environ["CLUSTER_IP"] = app.storage.user[HQ]["ip"]
+            os.environ["CLUSTER_NAME"] = app.storage.user[HQ]["name"]
             os.environ["MAPR_USER"] = app.storage.user["MAPR_USER"]
             os.environ["MAPR_PASS"] = app.storage.user["MAPR_PASS"]
             async for out in run_command("/bin/bash ./configure-maprclient.sh"):
@@ -266,7 +252,7 @@ async def run_configuration_steps():
                 and await create_tables(app.storage.user["HQ_HOST"], [HQ_IMAGETABLE]) \
                 and await create_streams(app.storage.user["HQ_HOST"], [f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}", f"{HQ_STREAM_REPLICATED}"]) \
                 and await create_volumes(app.storage.user["EDGE_HOST"], [EDGE_VOLUME_PATH]) \
-                and await create_mirror_volume(get_cluster_name("HQ"), app.storage.user["EDGE_HOST"], HQ_MISSION_FILES, EDGE_MISSION_FILES):
+                and await create_mirror_volume(HQSite['clusterName'], app.storage.user["EDGE_HOST"], HQ_MISSION_FILES, EDGE_MISSION_FILES):
                 # These should be created later on demo steps
                 # and await create_streams(app.storage.user["EDGE_HOST"],[f"{EDGE_VOLUME_PATH}/{EDGE_STREAM_REPLICATED}"]):
                 # and await create_tables(app.storage.user["EDGE_HOST"], []) \
@@ -276,7 +262,7 @@ async def run_configuration_steps():
         # Step 4 - Enable auditing
         elif step["name"] == "auditing":
             step["status"] = "run_circle"
-            for cluster in "HQ", "EDGE": # enable auditing on both clusters
+            for cluster in HQ, EDGE: # enable auditing on both clusters
                 try:
                     auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
                     auditdata = {"mfs.enable.audit.as.stream":"1"}

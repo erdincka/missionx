@@ -34,22 +34,25 @@ EDGE_MISSION_FILES = f"{EDGE_VOLUME_PATH}/files.mirror"
 # timeout stream consumers
 MAX_POLL_TIME = 5
 
+HQ = "HQ"
+EDGE = "EDGE"
+
 # service name & processing delay in tuple
-SERVICES = {
-    "HQ": [
-        ("IMAGE Feed", 5),
-        ("Image Download", 2),
-        ("Asset Broadcast", 2),
-        ("Asset Response", 2),
-    ],
-    "EDGE": [
-        ("Audit Listener", 3),
-        ("Upstream Comm", 3),
-        ("Broadcast Listener", 3),
-        ("Asset Request", 3),
-        ("Asset Viewer", 3),
-    ],
-}
+# SERVICES = {
+#     "HQ": [
+#         ("IMAGE Feed", 5),
+#         ("Image Download", 2),
+#         ("Asset Broadcast", 2),
+#         ("Asset Response", 2),
+#     ],
+#     "EDGE": [
+#         ("Audit Listener", 3),
+#         ("Upstream Comm", 3),
+#         ("Broadcast Listener", 3),
+#         ("Asset Request", 3),
+#         ("Asset Viewer", 3),
+#     ],
+# }
 
 BGCOLORS = {
     "IMAGE Feed Service": "bg-sky-300",

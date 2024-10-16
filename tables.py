@@ -1,7 +1,7 @@
 import logging
 from mapr.ojai.storage.ConnectionFactory import ConnectionFactory
 
-logger = logging.getLogger("tables")
+logger = logging.getLogger(__name__)
 
 connection = None
 

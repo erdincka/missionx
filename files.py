@@ -7,7 +7,7 @@ import requests
 from common import HQ_VOLUME_PATH
 from helpers import *
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 def putfile(host: str, user: str, password: str, file: str, destfolder: str, *args, **kwargs):
     """

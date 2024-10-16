@@ -6,7 +6,7 @@ import timeit
 from common import MAX_POLL_TIME
 
 
-logger = logging.getLogger("streams")
+logger = logging.getLogger(__name__)
 
 def produce(stream: str, topic: str, record: str):
     from confluent_kafka import Producer

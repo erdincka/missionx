@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import logging
 import os
@@ -9,8 +10,9 @@ import requests
 import urllib
 from common import *
 from helpers import *
+from sites import HQSite, EdgeSite
 
-logger = logging.getLogger("functions")
+logger = logging.getLogger(__name__)
 
 async def run_command_with_dialog(command: str) -> None:
     """
@@ -48,7 +50,8 @@ async def run_command(command: str):
             break
         yield new.decode()
 
-    yield f"Finished: {command}"
+    yield "Done."
+    logger.debug(f"Finished: {command}")
 
 
 def get_cluster_name(key: str):
@@ -236,7 +239,7 @@ async def delete_volumes():
     auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
 
     # Remove HQ volume
-    host = app.storage.user["HQ"]["ip"]
+    host = app.storage.user[HQ]["ip"]
     volname = get_volume_name(HQ_VOLUME_PATH)
     replicated_volname = get_volume_name(HQ_MISSION_FILES)
     for volume in [replicated_volname, volname]:
@@ -258,7 +261,7 @@ async def delete_volumes():
                     logger.warning("Error response for delete volume %s: %s", volume, res['errors'][0]['desc'])
 
     # Remove Edge volume
-    host = app.storage.user["EDGE"]["ip"]
+    host = app.storage.user[EDGE]["ip"]
     volname = get_volume_name(EDGE_VOLUME_PATH)
     replicated_volname = get_volume_name(EDGE_MISSION_FILES)
     for volume in [replicated_volname, volname]:
@@ -285,11 +288,11 @@ def prepare_core():
     # These commands (or rather their REST API equivalents) are already run with the initial cluster configuration dialog. You can use them as reference.
     # HQ resources
     return f"""
-    echo "maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_VOLUME_PATH)} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
-    echo "maprcli table create -path /mapr/{get_cluster_name('HQ')}{HQ_IMAGETABLE} -tabletype json"
-    echo "maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p"
-    echo "maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p"
-    echo "maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_MISSION_FILES)} -path {HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
+    echo "maprcli volume create -cluster {HQSite['clusterName']} -name {get_volume_name(HQ_VOLUME_PATH)} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
+    echo "maprcli table create -path /mapr/{HQSite['clusterName']}{HQ_IMAGETABLE} -tabletype json"
+    echo "maprcli stream create -path /mapr/{HQSite['clusterName']}{HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p"
+    echo "maprcli stream create -path /mapr/{HQSite['clusterName']}{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p"
+    echo "maprcli volume create -cluster {HQSite['clusterName']} -name {get_volume_name(HQ_MISSION_FILES)} -path {HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
     """
 
 
@@ -300,71 +303,55 @@ def prepare_edge():
     # 2. Set authorisation ticket for the edge cluster
     # 3. Create a mirror volume on the edge cluster.
     return f"""
-    echo "/opt/mapr/server/configure.sh -c -C {app.storage.user['EDGE_HOST']}:7222 -N {get_cluster_name('EDGE')} -secure"
-    echo "echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {get_cluster_name('EDGE')} -user {app.storage.user['MAPR_USER']}"
-    echo "maprcli volume create -type mirror -name {get_volume_name(EDGE_MISSION_FILES)} -cluster {get_cluster_name('EDGE')} -path {EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{get_cluster_name('HQ')} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
+    echo "/opt/mapr/server/configure.sh -c -C {app.storage.user['EDGE_HOST']}:7222 -N {EdgeSite['clusterName']} -secure"
+    echo "echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {EdgeSite['clusterName']} -user {app.storage.user['MAPR_USER']}"
+    echo "maprcli volume create -type mirror -name {get_volume_name(EDGE_MISSION_FILES)} -cluster {EdgeSite['clusterName']} -path {EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{HQSite['clusterName']} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
     """
 
 
-def toggle_service(prop: str):
-    if app.storage.general['services'][prop]:
-        app.storage.general["services"][prop] = False
-    else:
-        app.storage.general["services"][prop] = True
+# def service_status(service: tuple):
+#     # Add if services are not set up yet
+#     name, _ = service
+#     prop = name.lower().replace(" ", "")
 
+#     if prop not in app.storage.general["services"]:
+#         app.storage.general["services"][prop] = False
 
-def toggle_debug(val: bool):
-    if val:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-
-
-def service_status(service: tuple):
-    # Add if services are not set up yet
-    if "services" not in app.storage.general: app.storage.general["services"] = {}
-    name, _ = service
-    prop = name.lower().replace(" ", "")
-
-    if prop not in app.storage.general["services"]:
-        app.storage.general["services"][prop] = False
-
-    with ui.item(on_click=lambda n=prop: toggle_service(n)).classes("text-xs"): #.bind_enabled_from(app.storage.general["services"], prop)
-        with ui.item_section():
-            ui.item_label(name).classes("no-wrap")
-        with ui.item_section().props('side'):
-            ui.icon("fa-solid fa-circle-question fa-xs").bind_name_from(app.storage.general["services"], prop, backward=lambda x: "fa-solid fa-circle-check fa-xs" if x else "fa-solid fa-circle-xmark fa-xs")
+#     with ui.item(on_click=lambda n=prop: toggle_service(n)).classes("text-xs"): #.bind_enabled_from(app.storage.general["services"], prop)
+#         with ui.item_section():
+#             ui.item_label(name).classes("no-wrap")
+#         with ui.item_section().props('side'):
+#             ui.icon("fa-solid fa-circle-question fa-xs").bind_name_from(app.storage.general["services"], prop, backward=lambda x: "fa-solid fa-circle-check fa-xs" if x else "fa-solid fa-circle-xmark fa-xs")
 
 
 def service_counter(service: tuple):
-    name, _ = service
-    prop = name.lower().replace(" ", "")
+    _, svc = service
+
     with ui.item().classes("text-xs m-1 p-1 border"):
         with ui.item_section():
-            ui.item_label(f"{name.split(' ')[1]} processed").classes("no-wrap")
+            ui.item_label(f"{svc.name.split(' ')[1]} processed").classes("no-wrap")
         with ui.item_section().props('side'):
-            ui.badge().bind_text_from(app.storage.general, f"{prop}_count")
+            ui.badge().bind_text_from(svc, "count")
 
 
 def service_settings(service: tuple):
-    name, _ = service
-    prop = name.lower().replace(" ", "")
+    _, svc = service
 
     with ui.item().classes("text-xs m-1 p-1 border"):
         with ui.item_section():
-            ui.item_label(f"{name.split(' ')[1]} delay (s):").classes("no-wrap")
-            slider = ui.slider(min=2, max=10).bind_value(app.storage.general, f"{prop}_delay")
+            ui.item_label(f"{svc.name.split(' ')[1]} delay (s):").classes("no-wrap")
+            slider = ui.slider(min=2, max=10).bind_value(svc, "delay")
         with ui.item_section().props('side'):
             ui.label().bind_text_from(slider, 'value')
 
 
 # create replica stream from HQ to Edge
-async def stream_replica_setup(hqhost: str, user: str, password: str, edge_clustername: str):
+async def stream_replica_setup(hqhost: str, user: str, password: str):
     source_stream_path = HQ_STREAM_REPLICATED
     target_stream_path = EDGE_STREAM_REPLICATED
 
     logger.debug("Starting replication to %s", target_stream_path)
-    URL = f"https://{hqhost}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{edge_clustername}{target_stream_path}&multimaster=true"
+    URL = f"https://{hqhost}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{EdgeSite['clusterName']}{target_stream_path}&multimaster=true"
 
     # logger.debug("REST_URL: %s", URL)
     try:
@@ -412,7 +399,7 @@ async def toggle_replication():
 
     toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
 
-    REST_URL = f"https://{app.storage.user['EDGE_HOST']}:8443/rest/stream/replica/{toggle_action}?path=/mapr/{get_cluster_name('EDGE')}{EDGE_STREAM_REPLICATED}&replica=/mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED}"
+    REST_URL = f"https://{app.storage.user['EDGE_HOST']}:8443/rest/stream/replica/{toggle_action}?path=/mapr/{EdgeSite['clusterName']}{EDGE_STREAM_REPLICATED}&replica=/mapr/{HQSite['clusterName']}{HQ_STREAM_REPLICATED}"
 
     try:
         response = requests.get(url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)

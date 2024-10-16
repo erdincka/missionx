@@ -12,7 +12,7 @@ We are going to start and explain each service in the following steps.
 """
 
 FLOW = {
-    "HQ": [
+    HQ: [
         {
             "title": "Data Ingestion",
             "description": """
@@ -52,7 +52,7 @@ and save the image in a volume, while updating the location of the asset in the 
             "function": stream_replica_setup,
         },
     ],
-    "EDGE": [
+    EDGE: [
         {
             "title": "Upstream Comm",
             "description": "Monitor upstream connectivity and data replication status",

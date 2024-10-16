@@ -1,27 +1,33 @@
 import json
+from posixpath import basename
 import random
 import shutil
 from time import sleep
 from uuid import uuid4
 import importlib_resources
-from nicegui import app, run
-from dashboard import Dashboard
+from sites import *
 from files import putfile
-from functions import run_command
+
 from helpers import *
 from common import *
 from streams import consume, produce
 from tables import find_document_by_id, upsert_document
 
-logger = logging.getLogger("hq_services")
+logger = logging.getLogger(__name__)
+
+services = HQSite['services']
+tiles = HQSite['tiles']
+assets = HQSite['assets']
 
 # HQ SERVICES
 
-def image_feed_service(host: str, user: str, password: str, dashboard: Dashboard):
+def image_feed_service(host: str, user: str, password: str):
     """
     Simulate recieving events from IMAGE API, send random notification messages every IMAGE_FEED_INTERVAL seconds to TOPIC_IMAGEFEED,
     and save notification message into TABLE
     """
+
+    service = services["imagefeed"]
 
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
     table_path = HQ_IMAGETABLE
@@ -39,17 +45,18 @@ def image_feed_service(host: str, user: str, password: str, dashboard: Dashboard
     # logger.debug("IMAGE feed data: %s", input_data)
 
     # notify user
-    app.storage.general["services"]["imagefeed"] = True
+    service["active"] = True
 
     items = input_data["collection"]["items"]
     logger.debug("Loaded %d messages for IMAGE Feed", len(items))
 
     output_topic_path = f"{stream_path}:{TOPIC_IMAGEFEED}"
 
-    # skip if service is disabled by user
-    if not app.storage.general["services"].get("imagefeed", False):
+    # skip if service is disabled by user -- shouldn't come here - possibly safe to remove
+    if not service["active"]:
         logger.debug("is disabled")
         return
+
     count = random.randrange(5) + 1
 
     # pick "count" random items
@@ -78,9 +85,10 @@ def image_feed_service(host: str, user: str, password: str, dashboard: Dashboard
         if produce(stream=stream_path, topic=TOPIC_IMAGEFEED, record=json.dumps(message)):
             logger.info("Published image received event to %s", output_topic_path)
             # notify ui that we have new message
-            app.storage.general["imagefeed_count"] = app.storage.general.get("imagefeed_count", 0) + 1
+            # app.storage.general["imagefeed_count"] = app.storage.general.get("imagefeed_count", 0) + 1
+            service["count"] += 1
             # update dashboard tiles with new message
-            dashboard.messages.append(
+            tiles.append(
                 tuple(["IMAGE Feed Service", f"Asset: {message['assetID']}", "New asset available from IMAGE", None])
             )
 
@@ -94,11 +102,13 @@ def image_feed_service(host: str, user: str, password: str, dashboard: Dashboard
     # sleep(app.storage.general.get('imagefeed_delay', 1.0))
 
 
-def image_download_service(host: str, user: str, password: str, dashboard: Dashboard):
+def image_download_service(host: str, user: str, password: str):
     """
     Subscribe to TOPIC_IMAGEFEED and download/save assets (images) for published events into IMAGE_FILE_LOCATION
     Update TABLE with new download location and publish an event to notify downloaded/failed image to TOPIC_IMAGE_DOWNLOADED
     """
+
+    service = services["imagedownload"]
 
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
     table_path = HQ_IMAGETABLE
@@ -106,10 +116,10 @@ def image_download_service(host: str, user: str, password: str, dashboard: Dashb
     input_topic = TOPIC_IMAGEFEED
     output_topic = TOPIC_IMAGE_DOWNLOAD
 
-    app.storage.general["services"]["imagedownload"] = True
+    service["active"] = True
 
     # skip if service is disabled by user
-    if not app.storage.general["services"].get("imagedownload", False):
+    if not service["active"]:
         logger.debug("is disabled")
         return
 
@@ -173,9 +183,9 @@ def image_download_service(host: str, user: str, password: str, dashboard: Dashb
                     if produce(stream=stream_path, topic=output_topic, record=json.dumps(newMessage)):
                         logger.debug("Published image download event to %s", f"{stream_path}:{output_topic}")
                         # notify ui that we have new message
-                        app.storage.general["imagedownload_count"] = app.storage.general.get("imagedownload_count", 0) + 1
+                        service["count"] += 1
                         # update dashboard with a tile
-                        dashboard.messages.append(
+                        tiles.append(
                             tuple(["Image Download Service", doc['data'][0]['title'], doc['data'][0]['description'], doc["imageDownloadLocation"]])
                         )
                     else:
@@ -187,10 +197,12 @@ def image_download_service(host: str, user: str, password: str, dashboard: Dashb
     # logger.debug("FINISHED -> OK: %d, FAIL: %d", downloaded, failed)
 
 
-def asset_broadcast_service(dashboard: Dashboard):
+def asset_broadcast_service():
     """
     Subscribe to IMAGE_DOWNLOAD topic and publish to ASSET_BROADCAST to notify edge clusters for new asset availability
     """
+
+    service = services["assetbroadcast"]
 
     local_stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
     replicated_stream_path = HQ_STREAM_REPLICATED
@@ -198,10 +210,10 @@ def asset_broadcast_service(dashboard: Dashboard):
     input_topic = TOPIC_IMAGE_DOWNLOAD
     output_topic = TOPIC_ASSET_BROADCAST
 
-    app.storage.general["services"]["assetbroadcast"] = True
+    service["active"] = True
 
     # skip if service is disabled by user
-    if not app.storage.general["services"].get("assetbroadcast", False):
+    if not service["active"]:
         logger.debug("is disabled")
 
     for msg in consume(stream=local_stream_path, topic=input_topic):
@@ -225,10 +237,10 @@ def asset_broadcast_service(dashboard: Dashboard):
                     "Published asset to %s", f"{replicated_stream_path}:{output_topic}"
                 )
                 # notify ui that we have new message
-                app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
+                service["count"] += 1
                 # update dashboard with a tile
-                dashboard.messages.append(
-                    tuple(["Asset Broadcast Service", f"Broadcasting: , {record['assetID']}", record['title'], None])
+                tiles.append(
+                    tuple(["Asset Broadcast Service", f"Broadcasting: {record['assetID']}", record['title'], None])
                 )
             else:
                 # update message status
@@ -244,48 +256,53 @@ def asset_broadcast_service(dashboard: Dashboard):
             logger.warning(error)
 
 
-def asset_response_service(host: str, user: str, password: str, dashboard: Dashboard, clustername: str):
+def asset_response_service(host: str, user: str, password: str):
     """
     Monitor ASSET_REQUEST topic for the requests from Edge
     """
+
+    service = services["assetresponse"]
 
     stream_path = HQ_STREAM_REPLICATED
     table_path = HQ_IMAGETABLE
 
     input_topic = TOPIC_ASSET_REQUEST
 
-    app.storage.general["services"]["assetresponse"] = True
+    service["active"] = True
 
     # skip if service is disabled by user
-    if not app.storage.general["services"].get("assetresponse", False):
+    if not service["active"]:
         logger.debug("is disabled")
 
-    for msg in consume(stream=stream_path, topic=input_topic):
-        record = json.loads(msg)
-        logger.info("Responding to asset request for: %s", record['title'])
+    try:
 
-        doc = find_document_by_id(host=host, user=user, password=password, table=table_path, docid=record["assetID"])
-        logger.debug("Found: %s", str(doc['data'][0]['title']))
+        for msg in consume(stream=stream_path, topic=input_topic):
+            record = json.loads(msg)
+            logger.info("Responding to asset request for: %s", record['title'])
 
-        if doc is None:
-            logger.warning("Asset not found for: %s", record['assetID'])
+            doc = find_document_by_id(host=host, user=user, password=password, table=table_path, docid=record["assetID"])
+            logger.debug("Found: %s", str(doc['data'][0]['title']))
 
-        else:
-            logger.info("Copying asset from %s", doc["imageDownloadLocation"])
-            shutil.copyfile(f"/mapr/{clustername}{doc['imageDownloadLocation']}", f"/mapr/{clustername}{HQ_MISSION_FILES}/")
-            # # FIX: workaround to execute async function - need to get outputs from command
-            # async for out in run_command(
-            #     f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_MISSION_FILES}"
-            # ):
-            #     logger.debug(out.strip())
+            if doc is None:
+                logger.warning("Asset not found for: %s", record['assetID'])
+
+            else:
+                logger.info("Copying asset from %s", doc["imageDownloadLocation"])
+                filename = basename(doc['imageDownloadLocation'])
+                shutil.copyfile(f"/mapr/{HQSite.clustername}{doc['imageDownloadLocation']}", f"/mapr/{HQSite.clustername}{HQ_MISSION_FILES}/{filename}")
+                # # FIX: this is the flexible option, doesn't require /mapr mount - but don't want to use async here
+                # async for out in run_command(
+                #     f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_MISSION_FILES}"
+                # ):
+                #     logger.debug(out.strip())
 
 
-            logger.info("%s sent to mission volume", doc['imageDownloadLocation'])
-            # notify ui that we have new message
-            app.storage.general["assetresponse_count"] = (
-                app.storage.general.get("assetresponse_count", 0) + 1
-            )
-            # update dashboard with a tile
-            dashboard.messages.append(
-                tuple(["Asset Response Service", f"Processing: {record['assetID']}", record['title'], None])
-            )
+                logger.info("%s sent to mission volume", doc['imageDownloadLocation'])
+                # notify ui that we have new message
+                service["count"] += 1
+                # update dashboard with a tile
+                tiles.append(
+                    tuple(["Asset Response Service", f"Processing: {record['assetID']}", record['title'], None])
+                )
+    except Exception as error:
+        logger.warning("Error in asset response service: %s", str(error))
