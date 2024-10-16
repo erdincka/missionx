@@ -64,5 +64,5 @@ def getfile(host: str, user: str, password: str, filepath: str, *args, **kwargs)
         return response
 
     except Exception as error:
-        logger.warning("GETFILE ERROR %s", error)
+        logger.warning("No such file: %s", error)
         return None

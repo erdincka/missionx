@@ -14,15 +14,20 @@ Data Fabric core cluster should have following packages installed and configured
 
 ```bash
 # mapr-hivemetastore
-# mapr-kafka
-# mapr-nfs4server or mapr-nfs ### Global Namespace with external NFS mount will work only with mapr-nfs4server
-mapr-data-access-gateway
+mapr-kafka
+mapr-nfs4server # or mapr-nfs ### Global Namespace with external NFS mount will work only with mapr-nfs4server
+mapr-data-access-gateway # used for REST API access
+mapr-gateway # used for stream replication
 # mapr-hbase
 ```
 
+You will need to enable cluster and data auditing in the cluster to be able to monitor stream replication status. If you use the cluster admin 'mapr' user, these will be configured automatically with the Initial configuration step below.
+
+Additionally, you need to [Configure Gateways for Table and Stream Replication](https://docs.ezmeral.hpe.com/datafabric-customer-managed/78/Gateways/ConfiguringMapRGatewaysForTRAndI.html#task_clg_ywy_5t).
+
 ### Initial configuration
 
-Use the disconnected link icon to complete initial setup. This will require you to provide the host details to connect to the Data Fabric node where Data Access Gateway service is running. It will update the app configuration, and create the required (/app/[bronze|silver|gold]/) volumes and streams on the Data Fabric cluster.
+Use the disconnected link icon to complete initial setup. This will require you to provide the host details to connect to the Data Fabric node where Data Access Gateway service is running. It will update the app configuration, and create the required (/apps/missionX and /apps/missionX/files) volumes and streams on the Data Fabric cluster.
 
 ## Demo Flow
 

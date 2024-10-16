@@ -1,9 +1,11 @@
 import json
 import random
+import shutil
 from time import sleep
 from uuid import uuid4
 import importlib_resources
-from nicegui import app
+from nicegui import app, run
+from dashboard import Dashboard
 from files import putfile
 from functions import run_command
 from helpers import *
@@ -15,7 +17,7 @@ logger = logging.getLogger("hq_services")
 
 # HQ SERVICES
 
-def image_feed_service(host: str, user: str, password: str):
+def image_feed_service(host: str, user: str, password: str, dashboard: Dashboard):
     """
     Simulate recieving events from IMAGE API, send random notification messages every IMAGE_FEED_INTERVAL seconds to TOPIC_IMAGEFEED,
     and save notification message into TABLE
@@ -23,8 +25,6 @@ def image_feed_service(host: str, user: str, password: str):
 
     stream_path = f"{HQ_VOLUME_PATH}/{STREAM_PIPELINE}"
     table_path = HQ_IMAGETABLE
-
-    logger.info("is started.")
 
     # load mock feed data from file
     input_data = None
@@ -50,8 +50,6 @@ def image_feed_service(host: str, user: str, password: str):
     if not app.storage.general["services"].get("imagefeed", False):
         logger.debug("is disabled")
         return
-
-    logger.debug("is running...")
     count = random.randrange(5) + 1
 
     # pick "count" random items
@@ -82,7 +80,7 @@ def image_feed_service(host: str, user: str, password: str):
             # notify ui that we have new message
             app.storage.general["imagefeed_count"] = app.storage.general.get("imagefeed_count", 0) + 1
             # update dashboard tiles with new message
-            app.storage.general["dashboard_hq"].append(
+            dashboard.messages.append(
                 tuple(["IMAGE Feed Service", f"Asset: {message['assetID']}", "New asset available from IMAGE", None])
             )
 
@@ -96,7 +94,7 @@ def image_feed_service(host: str, user: str, password: str):
     # sleep(app.storage.general.get('imagefeed_delay', 1.0))
 
 
-def image_download_service(host: str, user: str, password: str):
+def image_download_service(host: str, user: str, password: str, dashboard: Dashboard):
     """
     Subscribe to TOPIC_IMAGEFEED and download/save assets (images) for published events into IMAGE_FILE_LOCATION
     Update TABLE with new download location and publish an event to notify downloaded/failed image to TOPIC_IMAGE_DOWNLOADED
@@ -109,14 +107,11 @@ def image_download_service(host: str, user: str, password: str):
     output_topic = TOPIC_IMAGE_DOWNLOAD
 
     app.storage.general["services"]["imagedownload"] = True
-    logger.debug("is started")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("imagedownload", False):
         logger.debug("is disabled")
         return
-
-    logger.debug("is running...")
 
     downloaded = 0
     failed = 0
@@ -124,10 +119,10 @@ def image_download_service(host: str, user: str, password: str):
     for msg in consume(stream=stream_path, topic=input_topic):
         try:
             record: dict = json.loads(msg)
-            logger.debug("Received: %s", record)
+            logger.debug("Received: %s", record['title'])
 
             doc = find_document_by_id(host=host, user=user, password=password, table=table_path, docid=record["assetID"])
-            logger.debug("Found: %s", str(doc))
+            # logger.debug("Found: %s", str(doc))
 
             if doc is None:
                 logger.warning("Asset not found for: %s", record["assetID"])
@@ -180,7 +175,7 @@ def image_download_service(host: str, user: str, password: str):
                         # notify ui that we have new message
                         app.storage.general["imagedownload_count"] = app.storage.general.get("imagedownload_count", 0) + 1
                         # update dashboard with a tile
-                        app.storage.general["dashboard_hq"].append(
+                        dashboard.messages.append(
                             tuple(["Image Download Service", doc['data'][0]['title'], doc['data'][0]['description'], doc["imageDownloadLocation"]])
                         )
                     else:
@@ -189,10 +184,10 @@ def image_download_service(host: str, user: str, password: str):
         except Exception as error:
             logger.warning(error)
 
-    logger.debug("FINISHED -> OK: %d, FAIL: %d", downloaded, failed)
+    # logger.debug("FINISHED -> OK: %d, FAIL: %d", downloaded, failed)
 
 
-def asset_broadcast_service():
+def asset_broadcast_service(dashboard: Dashboard):
     """
     Subscribe to IMAGE_DOWNLOAD topic and publish to ASSET_BROADCAST to notify edge clusters for new asset availability
     """
@@ -204,17 +199,14 @@ def asset_broadcast_service():
     output_topic = TOPIC_ASSET_BROADCAST
 
     app.storage.general["services"]["assetbroadcast"] = True
-    logger.debug("is started")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("assetbroadcast", False):
         logger.debug("is disabled")
 
-    logger.debug("is running...")
-
     for msg in consume(stream=local_stream_path, topic=input_topic):
         record = json.loads(msg)
-        logger.debug("Received: %s", record)
+        logger.debug("Received: %s", record['title'])
 
         # skip assets that failed to download
         if record["status"] == "failed":
@@ -235,7 +227,7 @@ def asset_broadcast_service():
                 # notify ui that we have new message
                 app.storage.general["assetbroadcast_count"] = app.storage.general.get("assetbroadcast_count", 0) + 1
                 # update dashboard with a tile
-                app.storage.general["dashboard_hq"].append(
+                dashboard.messages.append(
                     tuple(["Asset Broadcast Service", f"Broadcasting: , {record['assetID']}", record['title'], None])
                 )
             else:
@@ -252,7 +244,7 @@ def asset_broadcast_service():
             logger.warning(error)
 
 
-def asset_response_service(host: str, user: str, password: str):
+def asset_response_service(host: str, user: str, password: str, dashboard: Dashboard, clustername: str):
     """
     Monitor ASSET_REQUEST topic for the requests from Edge
     """
@@ -263,35 +255,37 @@ def asset_response_service(host: str, user: str, password: str):
     input_topic = TOPIC_ASSET_REQUEST
 
     app.storage.general["services"]["assetresponse"] = True
-    logger.debug("is started")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("assetresponse", False):
         logger.debug("is disabled")
-
-    logger.debug("is running...")
 
     for msg in consume(stream=stream_path, topic=input_topic):
         record = json.loads(msg)
         logger.info("Responding to asset request for: %s", record['title'])
 
         doc = find_document_by_id(host=host, user=user, password=password, table=table_path, docid=record["assetID"])
-        logger.debug("Found: %s", str(doc))
+        logger.debug("Found: %s", str(doc['data'][0]['title']))
 
         if doc is None:
             logger.warning("Asset not found for: %s", record['assetID'])
 
         else:
             logger.info("Copying asset from %s", doc["imageDownloadLocation"])
-            run_command(
-                f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_MISSION_FILES}"
-            )
+            shutil.copyfile(f"/mapr/{clustername}{doc['imageDownloadLocation']}", f"/mapr/{clustername}{HQ_MISSION_FILES}/")
+            # # FIX: workaround to execute async function - need to get outputs from command
+            # async for out in run_command(
+            #     f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_MISSION_FILES}"
+            # ):
+            #     logger.debug(out.strip())
+
+
             logger.info("%s sent to mission volume", doc['imageDownloadLocation'])
             # notify ui that we have new message
             app.storage.general["assetresponse_count"] = (
                 app.storage.general.get("assetresponse_count", 0) + 1
             )
             # update dashboard with a tile
-            app.storage.general["dashboard_hq"].append(
+            dashboard.messages.append(
                 tuple(["Asset Response Service", f"Processing: {record['assetID']}", record['title'], None])
             )

@@ -1,4 +1,5 @@
 import logging
+import pprint
 from time import sleep
 import timeit
 
@@ -13,7 +14,7 @@ def produce(stream: str, topic: str, record: str):
     p = Producer({"streams.producer.default.stream": stream})
 
     try:
-        logger.debug("pushing message: %s", record)
+        # logger.debug("pushing message: %s", record)
         p.produce(topic, record.encode("utf-8"))
 
     except Exception as error:
@@ -51,15 +52,18 @@ def consume(stream: str, topic: str):
             if not message.error(): yield message.value().decode("utf-8")
 
             elif message.error().code() == KafkaError._PARTITION_EOF:
-                raise EOFError
-            # silently ignore other errors
-            else: logger.debug(message.error())
+                break
+            # silently ignore errors
+            else:
+                # logger.debug(message.error().str())
+                logger.debug("Kahrolsun kafka")
 
             # add delay
             sleep(0.1)
 
     except Exception as error:
-        logger.debug(error)
+        pprint.pprint(f"Stream error: {error}")
+        # if len(str(error)) > 0: logger.debug(error)
 
     finally:
         consumer.close()

@@ -1,19 +1,43 @@
-from nicegui import app, ui
-from edge_services import asset_request_service, asset_viewer_service, audit_listener_service, broadcast_listener_service, make_asset_request, upstream_comm_service
+import logging
+from nicegui import app, ui, observables
+from dashboard import *
+from edge_services import *
 from functions import *
 
 from helpers import *
 from common import *
-import steps
+
+dashboard = Dashboard()
+logger = logging.getLogger(__name__)
+
 
 @ui.page("/edge_dashboard", title="Edge Dashboard")
 def edge_page():
     # Edge Services
-    auditlistener_timer = ui.timer(app.storage.general["auditlistener_delay"], lambda: run.io_bound(audit_listener_service, host=app.storage.user['EDGE_HOST'], clustername=get_cluster_name('EDGE')), active=False)
-    upstreamcomm_timer = ui.timer(app.storage.general["upstreamcomm_delay"], lambda: run.io_bound(upstream_comm_service, host=app.storage.user['EDGE_HOST'], user=app.storage.user['MAPR_USER'], password=app.storage.user['MAPR_PASS']), active=False)
-    broadcastlistener_timer = ui.timer(app.storage.general["broadcastlistener_delay"], lambda: run.io_bound(broadcast_listener_service, clustername=get_cluster_name('EDGE')), active=False)
-    assetrequest_timer = ui.timer(app.storage.general["assetrequest_delay"], lambda: run.io_bound(asset_request_service, clustername=get_cluster_name(['EDGE_HOST'])), active=False)
-    assetviewer_timer = ui.timer(app.storage.general["assetviewer_delay"], lambda: run.io_bound(asset_viewer_service, host=app.storage.user['EDGE_HOST'], user=app.storage.user['MAPR_USER'], password=app.storage.user['MAPR_PASS']), active=False)
+    auditlistener_timer = ui.timer(dashboard.auditlistener_delay, lambda: run.io_bound(audit_listener_service,
+                                                                                                    host=app.storage.user['EDGE_HOST'],
+                                                                                                    clustername=get_cluster_name('EDGE')),
+                                                                            active=False)
+    upstreamcomm_timer = ui.timer(dashboard.upstreamcomm_delay, lambda: run.io_bound(upstream_comm_service,
+                                                                                                  host=app.storage.user['EDGE_HOST'],
+                                                                                                  user=app.storage.user['MAPR_USER'],
+                                                                                                  password=app.storage.user['MAPR_PASS'],
+                                                                                                  messages=dashboard.messages),
+                                                                            active=False)
+    broadcastlistener_timer = ui.timer(dashboard.broadcastlistener_delay, lambda: run.io_bound(broadcast_listener_service,
+                                                                                                            clustername=get_cluster_name('EDGE'),
+                                                                                                            dashboard=dashboard),
+                                                                            active=False)
+    assetrequest_timer = ui.timer(dashboard.assetrequest_delay, lambda: run.io_bound(asset_request_service,
+                                                                                                  clustername=get_cluster_name('EDGE'),
+                                                                                                  assets=dashboard.assets),
+                                                                            active=False)
+    assetviewer_timer = ui.timer(dashboard.assetviewer_delay, lambda: run.io_bound(asset_viewer_service,
+                                                                                                host=app.storage.user['EDGE_HOST'],
+                                                                                                user=app.storage.user['MAPR_USER'],
+                                                                                                password=app.storage.user['MAPR_PASS'],
+                                                                                                dashboard=dashboard),
+                                                                            active=False)
 
     # Edge Dashboard
     with ui.row().classes("w-full no-wrap place-items-center"):
@@ -64,18 +88,11 @@ def edge_page():
                 for svc in SERVICES["EDGE"]:
                     service_counter(svc)
 
-            # Control panel
-            with ui.list().props('bordered separator').classes("text-xs w-full"):
-                ui.item_label('Control Panel').props('header').classes('text-bold text-sm bg-primary')
-                for svc in SERVICES["EDGE"]:
-                    service_settings(svc)
-
-
         # right panel
         with ui.column().classes("w-full"):
 
             # List the broadcasted messages
-            assets = (
+            assets_table = (
                 ui.table(
                     title="Published assets",
                     columns=[
@@ -103,23 +120,17 @@ def edge_page():
                     row_key="assetID",
                     pagination=0,
                 )
-                .on("rowClick", lambda e: make_asset_request(e.args[1]))
+                .on("rowClick", lambda e: make_asset_request(e.args[1]['assetID'], dashboard.assets))
                 .props("dense separator=None wrap-cells flat bordered virtual-scroll")
                 .classes("w-full")
                 .style("height: 300px")
             )
-            ui.timer(
-                0.5,
-                lambda: assets.update_rows(
-                    reversed(app.storage.general.get("broadcastreceived", []))
-                ),
-            )
+
+            # Refresh the asset list
+            ui.timer(0.5, lambda: assets_table.update_rows(reversed(dashboard.assets), clear_selection=False))
 
             with ui.grid(columns=5).classes("w-full"):
                 # The image display widget to show downloaded assets in real-time
-                ui.timer(0.5, lambda: dashboard_tiles(app.storage.user["EDGE_HOST"], "dashboard_edge"))
+                ui.timer(0.5, lambda: dashboard_tiles(app.storage.user["EDGE_HOST"], dashboard.messages))
                 # update metrics
                 # ui.timer(0.5, lambda: update_metrics_for("HQ", metric_chart))
-            # The image display widget to show downloaded assets in real-time
-            # with ui.grid(columns=4).classes("p-1") as images:
-            #     ui.timer(0.5, lambda: dashboard_tiles(os.environ['EDGE_IP'], "dashboard_edge"))

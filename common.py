@@ -18,7 +18,7 @@ EDGE_VOLUME_PATH = "/apps/missionX-edge"
 
 STREAM_PIPELINE = "pipelineStream"
 HQ_STREAM_REPLICATED = f"{HQ_VOLUME_PATH}/replicatedStream"
-EDGE_STREAM_REPLICATED = f"{EDGE_VOLUME_PATH}/missionX.replicatedStream"
+EDGE_STREAM_REPLICATED = f"{EDGE_VOLUME_PATH}/replicatedStream.copy"
 
 HQ_IMAGETABLE = f"{HQ_VOLUME_PATH}/imagesTable"
 TOPIC_IMAGEFEED = "IMAGEFEED"

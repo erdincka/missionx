@@ -281,66 +281,15 @@ async def delete_volumes():
     app.storage.user['busy'] = False
 
 
-# def run_command(cmd):
-#     try:
-#         result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
-#         if result.returncode == 0:
-#             logger.debug("# %s ==> OK", cmd)
-#         else:
-#             logger.warning("# %s ==> %s", cmd, result.stdout)
-#             logger.debug(result.stderr)
-
-#         if result.stdout != "":
-#             logger.debug(result.stdout)
-#         if result.stderr != "":
-#             if "Failed to connect to IPv6" not in result.stderr:
-#                 logger.debug(result)
-#             else:
-#                 logger.debug("ignoring IPv6 errors...")
-
-#     except Exception as error:
-#         logger.warning(error)
-
-
-# def get_command_output(cmd):
-#     try:
-#         result = subprocess.run(cmd, shell=True, capture_output=True, universal_newlines=True)
-#         if result.returncode == 0:
-#             logger.debug("# %s ==> OK", cmd)
-#         else:
-#             logger.warning("# %s ==> %s", cmd, result.stdout)
-#             logger.debug(result.stderr)
-
-#         if result.stdout != "":
-#             return result.stdout
-#         if result.stderr != "":
-#             if "Failed to connect to IPv6" not in result.stderr:
-#                 logger.debug(result)
-#             else:
-#                 logger.debug("ignoring IPv6 errors...")
-
-#     except Exception as error:
-#         logger.warning(error)
-
-
-# def switch_cluster_to(dest: str):
-#     """
-#     Bring the selected cluster to the first line in /opt/mapr/conf/mapr-clusters.conf, so hadoop and streams commands will use that cluster.
-#     This is a dirty hack to overcome the lack of cluster selection of certain APIs.
-#     """
-
-#     command= f"""selected=$(grep {dest} /opt/mapr/conf/mapr-clusters.conf); others=$(grep -v {dest} /opt/mapr/conf/mapr-clusters.conf); echo "$selected\n$others" > /opt/mapr/conf/mapr-clusters.conf"""
-#     run_command(command)
-
 def prepare_core():
     # These commands (or rather their REST API equivalents) are already run with the initial cluster configuration dialog. You can use them as reference.
     # HQ resources
     return f"""
-    maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_VOLUME_PATH)} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1
-    maprcli table create -path /mapr/{get_cluster_name('HQ')}{HQ_IMAGETABLE} -tabletype json
-    maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p
-    maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p
-    maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_MISSION_FILES)} -path {HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1
+    echo "maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_VOLUME_PATH)} -path {HQ_VOLUME_PATH} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
+    echo "maprcli table create -path /mapr/{get_cluster_name('HQ')}{HQ_IMAGETABLE} -tabletype json"
+    echo "maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_VOLUME_PATH}/{STREAM_PIPELINE} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p"
+    echo "maprcli stream create -path /mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED} -ttl 86400 -compression lz4 -produceperm p -consumeperm p -topicperm p"
+    echo "maprcli volume create -cluster {get_cluster_name('HQ')} -name {get_volume_name(HQ_MISSION_FILES)} -path {HQ_MISSION_FILES} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
     """
 
 
@@ -351,9 +300,9 @@ def prepare_edge():
     # 2. Set authorisation ticket for the edge cluster
     # 3. Create a mirror volume on the edge cluster.
     return f"""
-    /opt/mapr/server/configure.sh -c -C {app.storage.user['EDGE_HOST']}:7222 -N {get_cluster_name('EDGE')} -secure
-    echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {get_cluster_name('EDGE')} -user {app.storage.user['MAPR_USER']}
-    maprcli volume create -type mirror -name {get_volume_name(EDGE_MISSION_FILES)} -cluster {get_cluster_name('EDGE')} -path {EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{get_cluster_name('HQ')} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1
+    echo "/opt/mapr/server/configure.sh -c -C {app.storage.user['EDGE_HOST']}:7222 -N {get_cluster_name('EDGE')} -secure"
+    echo "echo {app.storage.user['MAPR_PASS']} | maprlogin password -cluster {get_cluster_name('EDGE')} -user {app.storage.user['MAPR_USER']}"
+    echo "maprcli volume create -type mirror -name {get_volume_name(EDGE_MISSION_FILES)} -cluster {get_cluster_name('EDGE')} -path {EDGE_MISSION_FILES} -source {HQ_MISSION_FILES}@{get_cluster_name('HQ')} -replication 1 -minreplication 1 -nsreplication 1 -nsminreplication 1"
     """
 
 
@@ -362,7 +311,6 @@ def toggle_service(prop: str):
         app.storage.general["services"][prop] = False
     else:
         app.storage.general["services"][prop] = True
-        ##### FIND THE SERVICE AND RUN IT - OR START ALL SERVICES AT STARTUP
 
 
 def toggle_debug(val: bool):
@@ -385,7 +333,6 @@ def service_status(service: tuple):
         with ui.item_section():
             ui.item_label(name).classes("no-wrap")
         with ui.item_section().props('side'):
-            # ui.label().bind_text_from(app.storage.general["services"], prop, backward=lambda x: "Started" if x else "Stopped")
             ui.icon("fa-solid fa-circle-question fa-xs").bind_name_from(app.storage.general["services"], prop, backward=lambda x: "fa-solid fa-circle-check fa-xs" if x else "fa-solid fa-circle-xmark fa-xs")
 
 
@@ -459,17 +406,19 @@ async def start_volume_mirroring(edgehost: str, user: str, password: str):
 
 
 async def toggle_replication():
-    """ FIX: not working
     """
+    Pause/resume stream replication - EDGE to HQ
+    """
+
     toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
 
-    REST_URL = f"https://{app.storage.user['EDGE_HOST']}:8443/rest/stream/replica/{toggle_action}?path={EDGE_STREAM_REPLICATED}&replica={HQ_STREAM_REPLICATED}"
+    REST_URL = f"https://{app.storage.user['EDGE_HOST']}:8443/rest/stream/replica/{toggle_action}?path=/mapr/{get_cluster_name('EDGE')}{EDGE_STREAM_REPLICATED}&replica=/mapr/{get_cluster_name('HQ')}{HQ_STREAM_REPLICATED}"
 
     try:
         response = requests.get(url=REST_URL, auth=(app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"]), verify=False)
         response.raise_for_status()
 
-        logger.debug(response.text)
+        logger.info(f"Toggle replication response: {response.text}")
 
     except Exception as error:
         logger.warning(error)
@@ -496,17 +445,17 @@ def show_image(host: str, title: str, description: str, imageUrl: str):
 
 
 # return image to display on UI
-def dashboard_tiles(host: str, source: str):
+async def dashboard_tiles(host: str, messages: list):
     """
     host:
-    source: string of key in app.storage.general, hq_dashboard | edge_dashboard, contains: list[DashboardTile]
+    messages: list[dict]
     """
 
     # if source in app.storage.general and len(app.storage.general[source]) > 0:
     # Return an image card if available
-    if len(app.storage.general[source]) > 0:
-        service, title, description, imageUrl = app.storage.general.get(source, []).pop()
-        logger.debug("Process tile for service: %s, title: %s, description: %s, and imageurl: %s", service, title, description, imageUrl)
+    while len(messages) > 0:
+        service, title, description, imageUrl = messages.pop()
+        # logger.debug("Process tile for service: %s, title: %s, description: %s, and imageurl: %s", service, title, description, imageUrl)
 
         if service == "Asset Viewer Service" or service == "Image Download Service":
             with ui.card().classes("h-80 animate-fadeIn").props("bordered").tight() as img:

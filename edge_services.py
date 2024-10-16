@@ -1,8 +1,10 @@
+import datetime
 import json
 import socket
 
 import requests
 
+from dashboard import *
 from common import *
 from files import getfile
 from functions import get_volume_name
@@ -23,14 +25,10 @@ def audit_listener_service(host: str, clustername: str):
 
     app.storage.general["services"]["auditlistener"] = True
 
-    logger.debug("is started")
-
     # skip if service is disabled by user
     if not app.storage.general["services"].get("auditlistener", False):
-        logger.debug("is disabled")
+        # logger.debug("is disabled")
         return
-
-    logger.debug("is running...")
 
     host_fqdn = socket.getfqdn(host)
     # host_ipv4 = socket.gethostbyname(host_fqdn)
@@ -38,12 +36,14 @@ def audit_listener_service(host: str, clustername: str):
     # logger.debug(f"FQDN: {host_fqdn}")
     # logger.debug(f"IPv4: {host_ipv4}")
 
+    total_records = 0
+
     for msg in consume(
         stream=audit_stream_path,
         topic=f"{clustername}_db_{host_fqdn}",
     ):
         record = json.loads(msg)
-        logger.debug("Received: %s", record)
+        # logger.debug("Received: %s", record)
 
         if (
             record["operation"] == "DB_UPSTREAMADD"
@@ -56,22 +56,18 @@ def audit_listener_service(host: str, clustername: str):
         else:
             logger.debug("Uninterested operation %s", record['operation'])
 
-        app.storage.general["auditlistener_count"] = (
-            app.storage.general.get("auditlistener_count", 0) + 1
-        )
+        total_records += 1
+
+    app.storage.general["auditlistener_count"] += total_records
 
 
-def upstream_comm_service(host: str, user: str, password: str):
+def upstream_comm_service(host: str, user: str, password: str, messages: list):
     app.storage.general["services"]["upstreamcomm"] = True
-
-    logger.debug("is started...")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("upstreamcomm", False):
-        logger.debug("is disabled")
+        # logger.debug("is disabled")
         return
-
-    logger.debug("is running...")
 
     # check volume replication
     URL = f"https://{host}:8443/rest/volume/info?name={get_volume_name(EDGE_MISSION_FILES)}"
@@ -91,7 +87,7 @@ def upstream_comm_service(host: str, user: str, password: str):
         except: # if failed to get expected data
             app.storage.general["volume_replication"] = "ERROR"
 
-        app.storage.general["volume_replication"] = f"{lastUpdatedSeconds}s ago"
+        app.storage.general["volume_replication"] = f"{str(datetime.timedelta(seconds=lastUpdatedSeconds))} ago"
 
     else:
         logger.warning("Cannot get volume info")
@@ -107,7 +103,7 @@ def upstream_comm_service(host: str, user: str, password: str):
 
     if stream_response:
         result = stream_response.json()
-        logger.debug("stream info: %s", result)
+        # logger.debug("stream info: %s", result)
 
         if result['status'] == "ERROR":
             app.storage.general["stream_replication"] = "ERROR"
@@ -118,38 +114,35 @@ def upstream_comm_service(host: str, user: str, password: str):
 
         elif result['status'] == "OK":
             resultData = result.get("data", {}).pop()
-            logger.debug("%s target stream: %s", EDGE_STREAM_REPLICATED, resultData)
+            # logger.debug("%s target stream: %s", EDGE_STREAM_REPLICATED, resultData)
 
             # skip updates if same with previous state
             if resultData.get("replicaState", "ERROR") == app.storage.general["stream_replication"]:
                 return
             else:
                 # replicaState = resultData['replicaState'].replace("REPLICA_STATE_", "")
+                replicaState = "UNKNOWN" # default state
                 if resultData["paused"]:
                     replicaState = "PAUSED"
                 elif resultData["isUptodate"]:
                     replicaState = "SYNCED"
-                else:
-                    replicaState = "UNKNOWN" # TODO: need a better error handling here
 
                 # FIX: the next line is causing exception/error and cannot figure out why
                 # ERROR:handle_exception: There is no current event loop in thread 'ThreadPoolExecutor-2_0'.
                 app.storage.general["stream_replication"] = replicaState
-                # update dashboard with a tile
-                app.storage.general["dashboard_edge"].append(
-                    tuple(["Upstream Comm Service", resultData['cluster'], replicaState, None])
-                )
+                # update dashboard with a tile -- confusing for user, instead, we update replication status only
+                # messages.append(
+                #     tuple(["Upstream Comm Service", resultData['cluster'], replicaState, None])
+                # )
 
     else:
         logger.warning("Cannot get stream replica")
 
     # increase counter for each processing
-    app.storage.general["upstreamcomm_count"] = (
-        app.storage.general.get("upstreamcomm_count", 0) + 1
-    )
+    # app.storage.general["upstreamcomm_count"] += 1
 
 
-def broadcast_listener_service(clustername: str):
+def broadcast_listener_service(clustername: str, dashboard: Dashboard):
     """
     Process messages in ASSET_BROADCAST topic
     """
@@ -159,38 +152,37 @@ def broadcast_listener_service(clustername: str):
     input_topic = TOPIC_ASSET_BROADCAST
 
     app.storage.general["services"]["broadcastlistener"] = True
-    app.storage.general["broadcastreceived"] = []
-
-    logger.debug("is started...")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("broadcastlistener", False):
-        logger.debug("is disabled")
+        # logger.debug("is disabled")
         return
-
-    logger.debug("is running...")
 
     try:
         for msg in consume(stream=stream_path, topic=input_topic):
             record = json.loads(msg)
-            logger.debug("Received: %s", record)
+            logger.debug("Broadcast Received: %s", record['title'])
 
             record['status'] = "published"
-            app.storage.general["broadcastreceived"].append(record)
+            # update dashboard with the tiles
+            dashboard.assets.append(record)
 
-            app.storage.general["broadcastlistener_count"] = (
-                app.storage.general.get("broadcastlistener_count", 0) + 1
-            )
-            # update dashboard with a tile
-            # app.storage.general["dashboard_edge"].append(
+            # update broadcast received
+            # dashboard.messages.append(
             #     tuple(["Broadcast Listener Service", f"Broadcast Received: {record['title']}", record["description"], None])
             # )
+            # logger.debug(f"Dashboard updated with messages: {json.dumps(dashboard.messages)}")
+            # logger.debug(f"Dashboard updated with tiles: {json.dumps(dashboard.tiles)}")
 
     except Exception as error:
         logger.debug(error)
 
+    # finally:
+    #     # update counters
+    #     app.storage.general["broadcastlistener_count"] += len(received_messages)
 
-def asset_request_service(clustername: str):
+
+def asset_request_service(clustername: str, assets: list):
     """
     Request assets by reading from queue and putting them to the replicated stream on ASSET_REQUEST topic
     """
@@ -201,37 +193,18 @@ def asset_request_service(clustername: str):
 
     app.storage.general["services"]["assetrequest"] = True
 
-    logger.debug("is started...")
-
     # skip if service is disabled by user
     if not app.storage.general["services"].get("assetrequest", False):
-        logger.debug("is disabled")
+        # logger.debug("is disabled")
         return
 
-    logger.debug("is running...")
-
-    awaiting_processing = [a for a in app.storage.general.get("broadcastreceived", []) if a["status"] == "requesting..."]
-
     try:
-        while len(awaiting_processing) > 0:
-            asset = awaiting_processing.pop()
+        for asset in [a for a in assets if a["status"] == "requesting..."]:
             # Publish to request topic on the replicated stream
             if produce(stream=stream_path, topic=output_topic, record=json.dumps(asset)
             ):
                 logger.info("Requested: %s", asset['title'])
-                # notify ui that we have new message
-                app.storage.general["assetrequest_count"] = (
-                    app.storage.general.get("assetrequest_count", 0) + 1
-                )
-                # update status in the broadcast list
-                for a in app.storage.general["broadcastreceived"]:
-                    if asset['assetID'] == a['assetID']:
-                        a["status"] = "requested"
-
-                # update dashboard with a tile
-                app.storage.general["dashboard_edge"].append(
-                    tuple(["Asset Request Service", f"Request sent: {asset['assetID']}", asset["title"], None])
-                )
+                asset["status"] = "requested"
 
             else:
                 logger.warning("Publish to %s failed for %s", f"{stream_path}:{output_topic}", asset)
@@ -241,27 +214,24 @@ def asset_request_service(clustername: str):
 
 
 # put the request into queue
-def make_asset_request(asset: dict):
+def make_asset_request(assetID: str, tiles: list):
     # find and update the requested asset in the broadcast list
-    for a in app.storage.general.get("broadcastreceived", []):
-        if a['assetID'] == asset['assetID']:
+    logger.debug(f"Requesting asset: {assetID}")
+    for a in tiles:
+        if a['assetID'] == assetID:
             a["status"] = "requesting..."
 
 
-def asset_viewer_service(host: str, user: str, password: str):
+def asset_viewer_service(host: str, user: str, password: str, dashboard: Dashboard):
     app.storage.general["services"]["assetviewer"] = True
-
-    logger.debug("is started...")
 
     # skip if service is disabled by user
     if not app.storage.general["services"].get("assetviewer", False):
-        logger.debug("is disabled")
+        # logger.debug("is disabled")
         return
 
-    logger.debug("is running...")
-
-    for asset in [a for a in app.storage.general.get("broadcastreceived", []) if a["status"] == "requested"]:
-        logger.debug("Search for asset: %s", asset)
+    for asset in [a for a in dashboard.assets if a["status"] == "requested"]:
+        # logger.debug("Search for asset: %s", asset)
 
         filepath = f"{EDGE_MISSION_FILES}/{asset['filename']}"
 
@@ -273,14 +243,14 @@ def asset_viewer_service(host: str, user: str, password: str):
         )
 
         if response and response.status_code == 200:
-            logger.debug("Found asset file: %s", asset['filename'])
+            # logger.debug("Found asset file: %s", asset['filename'])
 
             asset["status"] = "received"
             # notify ui that we processed a request
-            app.storage.general["assetviewer_count"] = app.storage.general.get("assetviewer_count", 0) + 1
+            app.storage.general["assetviewer_count"] += 1
             # update dashboard with a tile
-            app.storage.general["dashboard_edge"].append(
+            dashboard.messages.append(
                 tuple(["Asset Viewer Service", asset['title'], asset['description'], filepath])
             )
         else:
-            logger.debug("File not found for asset: %s", asset)
+            logger.debug("File not found for asset: %s", asset["title"])

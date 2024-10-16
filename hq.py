@@ -1,21 +1,41 @@
 from nicegui import ui
+from dashboard import Dashboard
 import edge
 from functions import *
 
 from helpers import *
 from common import *
-from hq_services import asset_broadcast_service, asset_response_service, image_download_service, image_feed_service
+from hq_services import *
 import steps
 
+dashboard = Dashboard()
 logger = logging.getLogger(__name__)
 
 @ui.page("/hq_dashboard", title="HQ Dashboard")
 def hq_page():
     # HQ Services
-    imagefeed_timer = ui.timer(app.storage.general["imagefeed_delay"], lambda: run.io_bound(image_feed_service, host=app.storage.user['HQ_HOST'], user=app.storage.user['MAPR_USER'], password=app.storage.user['MAPR_PASS']), active=False)
-    imagedownload_timer = ui.timer(app.storage.general["imagedownload_delay"], lambda: run.io_bound(image_download_service, host=app.storage.user['HQ_HOST'], user=app.storage.user['MAPR_USER'], password=app.storage.user['MAPR_PASS']), active=False)
-    assetbroadcast_timer = ui.timer(app.storage.general["assetbroadcast_delay"], lambda: run.io_bound(asset_broadcast_service), active=False)
-    assetresponse_timer = ui.timer(app.storage.general["assetresponse_delay"], lambda: run.io_bound(asset_response_service, host=app.storage.user['HQ_HOST'], user=app.storage.user['MAPR_USER'], password=app.storage.user['MAPR_PASS']), active=False)
+    imagefeed_timer = ui.timer(dashboard.imagefeed_delay, lambda: run.io_bound(image_feed_service,
+                                                                                            host=app.storage.user['HQ_HOST'],
+                                                                                            user=app.storage.user['MAPR_USER'],
+                                                                                            password=app.storage.user['MAPR_PASS'],
+                                                                                            dashboard=dashboard),
+                                                                        active=False)
+    imagedownload_timer = ui.timer(dashboard.imagedownload_delay, lambda: run.io_bound(image_download_service,
+                                                                                                    host=app.storage.user['HQ_HOST'],
+                                                                                                    user=app.storage.user['MAPR_USER'],
+                                                                                                    password=app.storage.user['MAPR_PASS'],
+                                                                                                    dashboard=dashboard),
+                                                                                active=False)
+    assetbroadcast_timer = ui.timer(dashboard.assetbroadcast_delay, lambda: run.io_bound(asset_broadcast_service,
+                                                                                                      dashboard=dashboard),
+                                                                                active=False)
+    assetresponse_timer = ui.timer(dashboard.assetresponse_delay, lambda: run.io_bound(asset_response_service,
+                                                                                                    host=app.storage.user['HQ_HOST'],
+                                                                                                    user=app.storage.user['MAPR_USER'],
+                                                                                                    password=app.storage.user['MAPR_PASS'],
+                                                                                                    dashboard=dashboard,
+                                                                                                    clustername=get_cluster_name('HQ')),
+                                                                                active=False)
 
     # HQ Dashboard
     with ui.row().classes("w-full no-wrap place-items-center"):
@@ -36,16 +56,18 @@ def hq_page():
     with ui.row().classes("w-full no-wrap"):
         # left panel
         with ui.column().classes("w-fit"):
+            # Metrics
             with ui.list().props('bordered separator').classes("text-xs w-full"):
                 ui.item_label('System Metrics').props('header').classes('text-bold text-sm bg-primary')
                 for svc in SERVICES["HQ"]:
                     service_counter(svc)
 
+            # Control Panel
             with ui.list().props('bordered separator').classes("text-xs w-full"):
-                ui.item_label('Control Panel').props('header').classes('text-bold text-sm bg-primary')
-                for svc in SERVICES["HQ"]:
-                    service_settings(svc)
-                # manually add setting for tile removal
+                # ui.item_label('Control Panel').props('header').classes('text-bold text-sm bg-primary')
+                # for svc in SERVICES["HQ"]:
+                #     service_settings(svc)
+                # # manually add setting for tile removal
                 with ui.item().classes("text-xs m-1 p-1 border"):
                     with ui.item_section():
                         ui.item_label(f"Keep tiles for (s):").classes("no-wrap")
@@ -57,6 +79,6 @@ def hq_page():
         with ui.column().classes("w-full"):
             with ui.grid(columns=5).classes("w-full"):
                 # The image display widget to show downloaded assets in real-time
-                ui.timer(0.2, lambda: dashboard_tiles(app.storage.user["HQ_HOST"], "dashboard_hq"))
+                ui.timer(0.2, lambda: dashboard_tiles(app.storage.user["HQ_HOST"], dashboard.messages))
                 # update metrics
                 # ui.timer(0.5, lambda: update_metrics_for("HQ", metric_chart))

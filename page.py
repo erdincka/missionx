@@ -16,25 +16,21 @@ ui.add_body_html('<script src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawe
 @ui.page('/')
 async def index():
     # Reset previous run state if it was hang
-    app.storage.user["busy"] = False
+    # app.storage.user["busy"] = False
 
     # and ui counters & settings
-    for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
-        name, delay = svc
-        prop = name.lower().replace(' ', '')
-        if f"{prop}_count" not in app.storage.general.keys(): app.storage.general[f"{prop}_count"] = 0
-        if f"{prop}_delay" not in app.storage.general.keys(): app.storage.general[f"{prop}_delay"] = delay
-    if "tile_remove" not in app.storage.general.keys(): app.storage.general["tile_remove"] = 20
-
-    # # and image lists
-    if "dashboard_hq" not in app.storage.general: app.storage.general["dashboard_hq"] = []
-    if "dashboard_edge" not in app.storage.general: app.storage.general["dashboard_edge"] = []
-    # app.storage.general["dashboard_hq"] = []
-    # app.storage.general["dashboard_edge"] = []
+    # for svc in list(SERVICES["HQ"] + SERVICES["EDGE"]):
+    #     name, delay = svc
+    #     prop = name.lower().replace(' ', '')
+    #     if "services" not in app.storage.general: app.storage.general['services'] = {}
+    #     if prop not in app.storage.general["services"]: app.storage.general['services'][prop] = False
+    #     if f"{prop}_count" not in app.storage.general.keys(): app.storage.general[f"{prop}_count"] = 0
+    #     if f"{prop}_delay" not in app.storage.general.keys(): app.storage.general[f"{prop}_delay"] = delay
+    # if "tile_remove" not in app.storage.general.keys(): app.storage.general["tile_remove"] = 20
 
     # # and connectivity status
-    if "stream_replication" not in app.storage.general.keys(): app.storage.general["stream_replication"] = ""
-    if "volume_replication" not in app.storage.general.keys(): app.storage.general["volume_replication"] = ""
+    # if "stream_replication" not in app.storage.general.keys(): app.storage.general["stream_replication"] = ""
+    # if "volume_replication" not in app.storage.general.keys(): app.storage.general["volume_replication"] = ""
 
     # Header
     header(title=TITLE)
@@ -140,14 +136,6 @@ def header(title: str):
             ui.icon("error", size="2em", color="red").bind_visibility_from(
                 app.storage.user, "configured", lambda x: not x
             ).tooltip("Requires configuration!")
-
-            with ui.element("div").bind_visibility_from(app.storage.user, "demo_mode"):
-                ui.icon("check_circle", size="2em", color="green").bind_visibility_from(
-                    app.storage.user, "busy", lambda x: not x
-                ).tooltip("Ready")
-                ui.spinner("ios", size="2em", color="red").bind_visibility_from(
-                    app.storage.user, "busy"
-                ).tooltip("Busy")
 
     return header
 
