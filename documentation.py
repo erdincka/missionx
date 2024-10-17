@@ -4,6 +4,7 @@ from nicegui import ui, app
 
 from common import *
 from functions import *
+import steps
 
 class Help(ui.dialog):
     def __init__(self) -> None:
@@ -53,5 +54,22 @@ class Help(ui.dialog):
                         ))
 
             ui.separator()
+
+            # Demo Flow
+            with ui.expansion("Demo Flow for HQ", icon="fa-solid fa-gears", caption="Let's start the demo at the HQ Dashboard!", group="help").classes("w-full text-bold"):
+                for step in steps.FLOW[HQ]:
+                    ui.label(step["title"])
+                    ui.markdown(step["description"])
+                    ui.code(inspect.getsource(step["code"])).classes("w-full")
+                    # ui.button("Run", on_click=lambda: run_command_with_dialog(step["code"]()))
+
+            ui.separator()
+
+            with ui.expansion("Demo Flow for Edge", icon="fa-solid fa-truck-field", caption="Continue the demo at the Edge Dashboard!", group="help").classes("w-full text-bold"):
+                for step in steps.FLOW[EDGE]:
+                    ui.label(step["title"])
+                    ui.markdown(step["description"])
+                    ui.code(inspect.getsource(step["code"])).classes("w-full")
+                    # ui.button("Run", on_click=lambda: run_command_with_dialog(step["code"]()))
 
             ui.button('Close', on_click=self.close)
