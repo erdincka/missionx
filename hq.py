@@ -80,8 +80,6 @@ def hq_page():
 
         # right panel
         with ui.column().classes("w-full"):
-            ui.label("").bind_text_from(services['imagefeed'], "delay")
-            ui.label("").bind_text_from(services['imagefeed'], "count")
             with ui.grid(columns=5).classes("w-full"):
                 # The image display widget to show downloaded assets in real-time
                 ui.timer(0.2, lambda: dashboard_tiles(app.storage.user["HQ_HOST"], tiles))

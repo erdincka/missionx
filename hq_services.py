@@ -289,7 +289,7 @@ def asset_response_service(host: str, user: str, password: str):
             else:
                 logger.info("Copying asset from %s", doc["imageDownloadLocation"])
                 filename = basename(doc['imageDownloadLocation'])
-                shutil.copyfile(f"/mapr/{HQSite.clustername}{doc['imageDownloadLocation']}", f"/mapr/{HQSite.clustername}{HQ_MISSION_FILES}/{filename}")
+                shutil.copyfile(f"/mapr/{HQSite['clusterName']}{doc['imageDownloadLocation']}", f"/mapr/{HQSite['clusterName']}{HQ_MISSION_FILES}/{filename}")
                 # # FIX: this is the flexible option, doesn't require /mapr mount - but don't want to use async here
                 # async for out in run_command(
                 #     f"hadoop fs -cp {doc['imageDownloadLocation']} {HQ_MISSION_FILES}"

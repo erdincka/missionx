@@ -2,12 +2,13 @@ import io
 import json
 from fastapi.responses import StreamingResponse
 import httpx
-import importlib_resources
 from nicegui import ui, app
 
-from edge import edge_page
+from documentation import Help
 from functions import *
 from hq import hq_page
+
+from sites import *
 
 logger = logging.getLogger(__name__)
 
@@ -20,59 +21,13 @@ async def index():
 
     # Header
     header(title=TITLE)
-    # Info
-    with ui.expansion(
-        TITLE,
-        icon="info",
-        caption="Core to Edge end to end pipeline processing using Ezmeral Data Fabric",
-    ).classes("w-full").classes("text-bold"):
-        ui.markdown(DEMO["description"]).classes("font-normal")
-        ui.image(importlib_resources.files("main").joinpath(DEMO["image"])).classes(
-            "object-scale-down g-10"
-        )
 
-    ui.separator()
-
-    # Prepare
-    with ui.expansion("Set up the demo environment", icon="engineering", caption="Prepare the cluster for the demo").classes("w-full text-bold") as setup_page:
-
-        ui.label("Create the volumes, topics and tables at the HQ cluster.")
-
-        ui.code(inspect.getsource(prepare_core)).classes("w-full")
-
-        ui.button("Run", on_click=lambda: run_command_with_dialog(prepare_core())).bind_enabled_from(
-            app.storage.user, "busy", lambda x: not x
-        )
-
-        ui.space()
-
-        ui.label("Create the volume at the Edge cluster.")
-
-        ui.code(inspect.getsource(prepare_edge)).classes("w-full")
-
-        ui.button("Run", on_click=lambda: run_command_with_dialog(prepare_edge())).bind_enabled_from(
-            app.storage.user, "busy", lambda x: not x
-        )
-
-
-        # ui.space()
-
-        # ui.label("We need to establish bi-directional communication between HQ and Edge. Let's first enable the replication of broadcast stream so we can get intelligence data from HQ.")
-
-        # ui.code(inspect.getsource(stream_replica_setup)).classes("w-full")
-
-        # ui.button("Run", on_click=stream_replica_setup).bind_enabled_from(
-        #     app.storage.user, "busy", lambda x: not x
-        # )
-
-    # ui.separator()
-
-    # hq_page()
-    with ui.splitter(limits=(25,75)) as site_panels:
-        with site_panels.before:
-            hq_page()
-        with site_panels.after:
-            edge_page()
+    hq_page()
+    # with ui.splitter(limits=(25,75)) as site_panels:
+    #     with site_panels.before:
+    #         hq_page()
+    #     with site_panels.after:
+    #         edge_page()
 
     # ui.separator()
 
@@ -84,11 +39,16 @@ async def index():
 
 
 def header(title: str):
+
+    help = Help().props("full-width")
+
     with ui.header(elevated=True).classes("items-center justify-between uppercase py-1 px-4") as header:
         ui.button(icon="home", on_click=lambda: ui.navigate.to(index)).props("flat color=light")
 
         ui.label(title)
 
+        ui.space()
+        ui.button("Help", icon="help", on_click=help.open).props("flat color=light")
         ui.switch("Logs").props("checked-icon=check unchecked-icon=clear").bind_value(app.storage.user, 'demo_mode').bind_visibility_from(app.storage.user, HQ, backward=lambda x: x and len(x) > 0)
         ui.space()
 
@@ -138,17 +98,18 @@ def footer():
                 ui.button(
                     "GNS",
                     on_click=lambda: run_command_with_dialog(
-                        f"df -h {MOUNT_PATH}/*; ls -lA {MOUNT_PATH}"
+                        f"df -h {MOUNT_PATH}; tree -L 2 {MOUNT_PATH}"
                     ),
                 )
-                # Core folder
+                # Core
                 ui.button(
                     HQ,
                     on_click=lambda: run_command_with_dialog(
-                        f"ls -lA {MOUNT_PATH}/{HQSite['clusterName']}{HQ_VOLUME_PATH}"
+                        f"ls -lAR {MOUNT_PATH}/{HQSite['clusterName']}{HQ_VOLUME_PATH}"
                     ),
                 )
-                # Volumes
+                # Edge
+                EdgeSite["clusterName"] = get_cluster_name("EDGE")
                 ui.button(
                     EDGE,
                     on_click=lambda: run_command_with_dialog(

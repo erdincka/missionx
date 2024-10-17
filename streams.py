@@ -62,7 +62,7 @@ def consume(stream: str, topic: str):
             sleep(0.1)
 
     except Exception as error:
-        pprint.pprint(f"Stream error: {error}")
+        pprint.pprint(error)
         # if len(str(error)) > 0: logger.debug(error)
 
     finally:

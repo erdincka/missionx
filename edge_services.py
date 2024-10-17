@@ -19,14 +19,14 @@ services = EdgeSite['services']
 tiles = EdgeSite['tiles']
 assets = EdgeSite['assets']
 
-def audit_listener_service(host: str, clustername: str):
+def audit_listener_service(host: str):
     """
     Listens the auditlogstream to see if upstream replication is established.
     """
 
     service = services["auditlistener"]
 
-    audit_stream_path = "/var/mapr/auditstream/auditlogstream"
+    audit_stream_path = f"/mapr/{EdgeSite['clusterName']}/var/mapr/auditstream/auditlogstream"
     upstreamSource = HQ_STREAM_REPLICATED
 
     service["active"] = True
@@ -44,10 +44,10 @@ def audit_listener_service(host: str, clustername: str):
 
     for msg in consume(
         stream=audit_stream_path,
-        topic=f"{clustername}_db_{host_fqdn}",
+        topic=f"{EdgeSite['clusterName']}_db_{host_fqdn}",
     ):
         record = json.loads(msg)
-        # logger.debug("Received: %s", record)
+        logger.debug("[AUDIT]: %s", record)
 
         if (
             record["operation"] == "DB_UPSTREAMADD"
@@ -65,7 +65,7 @@ def audit_listener_service(host: str, clustername: str):
 
 
 
-def upstream_comm_service(host: str, user: str, password: str, messages: list):
+def upstream_comm_service(host: str, user: str, password: str):
 
     service = services["upstreamcomm"]
 
@@ -124,7 +124,7 @@ def upstream_comm_service(host: str, user: str, password: str, messages: list):
             # logger.debug("%s target stream: %s", EDGE_STREAM_REPLICATED, resultData)
 
             # skip updates if same with previous state
-            if resultData.get("replicaState", "ERROR") == app.storage.general["stream_replication"]:
+            if resultData.get("replicaState", "ERROR") == app.storage.general.get("stream_replication", None):
                 return
             else:
                 # replicaState = resultData['replicaState'].replace("REPLICA_STATE_", "")
@@ -136,7 +136,7 @@ def upstream_comm_service(host: str, user: str, password: str, messages: list):
 
                 app.storage.general["stream_replication"] = replicaState
                 # increase counter for each processing
-                service["count"] += 1
+                # service["count"] += 1
                 # update dashboard with a tile -- confusing for user, instead, we update replication status only
                 # messages.append(
                 #     tuple(["Upstream Comm Service", resultData['cluster'], replicaState, None])
@@ -146,14 +146,14 @@ def upstream_comm_service(host: str, user: str, password: str, messages: list):
         logger.warning("Cannot get stream replica")
 
 
-def broadcast_listener_service(clustername: str):
+def broadcast_listener_service():
     """
     Process messages in ASSET_BROADCAST topic
     """
 
     service = services["broadcastlistener"]
 
-    stream_path = f"/mapr/{clustername}{EDGE_STREAM_REPLICATED}"
+    stream_path = f"/mapr/{EdgeSite['clusterName']}{EDGE_STREAM_REPLICATED}"
 
     input_topic = TOPIC_ASSET_BROADCAST
 
@@ -169,15 +169,16 @@ def broadcast_listener_service(clustername: str):
             record = json.loads(msg)
             logger.debug("Broadcast Received: %s", record['title'])
 
-            record['status'] = "published"
+            # record['status'] = "published"
+            record['status'] = "!"
             # update dashboard with the tiles
             assets.append(record)
 
             service["count"] += 1
             # update broadcast received
-            tiles.append(
-                tuple(["Broadcast Listener Service", f"Broadcast Received: {record['title']}", record["description"], None])
-            )
+            # tiles.append(
+            #     tuple(["Broadcast Listener Service", f"Broadcast Received: {record['title']}", record["description"], None])
+            # )
             # logger.debug(f"Dashboard updated with messages: {json.dumps(messages)}")
             # logger.debug(f"Dashboard updated with tiles: {json.dumps(dashboard.tiles)}")
 
@@ -185,14 +186,14 @@ def broadcast_listener_service(clustername: str):
         logger.debug(error)
 
 
-def asset_request_service(clustername: str, assets: list):
+def asset_request_service():
     """
     Request assets by reading from queue and putting them to the replicated stream on ASSET_REQUEST topic
     """
 
     service = services["assetrequest"]
 
-    stream_path = f"/mapr/{clustername}{EDGE_STREAM_REPLICATED}"
+    stream_path = f"/mapr/{EdgeSite['clusterName']}{EDGE_STREAM_REPLICATED}"
 
     output_topic = TOPIC_ASSET_REQUEST
 

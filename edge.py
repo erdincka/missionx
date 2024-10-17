@@ -60,13 +60,13 @@ def edge_page():
 
         # Connectivity indicator
         with ui.row().classes("place-items-center"):
-            # Setup stream replication
-            ui.button("Replica", on_click=lambda:
-                stream_replica_setup(
-                    hqhost=app.storage.user["HQ_HOST"],
-                    user=app.storage.user["MAPR_USER"],
-                    password=app.storage.user["MAPR_PASS"],
-                )).classes("py-0 min-h-0").props("flat")
+            # Setup stream replication -- should be completed in pre-setup
+            # ui.button("Replica", on_click=lambda:
+            #     stream_replica_setup(
+            #         hqhost=app.storage.user["HQ_HOST"],
+            #         user=app.storage.user["MAPR_USER"],
+            #         password=app.storage.user["MAPR_PASS"],
+            #     )).classes("py-0 min-h-0").props("flat")
             # Trigger volume mirror
             ui.button("Mirror", on_click=lambda: start_volume_mirroring(
                 edgehost=app.storage.user["EDGE_HOST"],
@@ -91,8 +91,8 @@ def edge_page():
             # Metrics
             with ui.list().props('bordered separator').classes("text-xs w-full"):
                 ui.item_label('System Metrics').props('header').classes('text-bold text-sm bg-primary')
-                # for svc in SERVICES[EDGE]:
-                #     service_counter(svc)
+                for service in services.items():
+                    service_counter(service)
 
         # right panel
         with ui.column().classes("w-full"):
@@ -109,24 +109,15 @@ def edge_page():
                         #     "required": True,
                         #     "align": "left",
                         # },
-                        {
-                            "name": "title",
-                            "label": "Title",
-                            "field": "title",
-                            "required": True,
-                            "align": "left",
-                        },
-                        {
-                            "name": "status",
-                            "label": "Status",
-                            "field": "status",
-                        }
+                        { "name": "title", "label": "Title", "field": "title", "required": True, "align": "left"},
+                        { "name": "status", "label": "Status", "field": "status"},
                     ],
                     rows=[],
                     row_key="assetID",
                     pagination=0,
                 )
                 .on("rowClick", lambda e: make_asset_request(e.args[1]['assetID'], assets))
+                .on("mouseOver", lambda e: ui.tooltip(e.args[1]['description']))
                 .props("dense separator=None wrap-cells flat bordered virtual-scroll")
                 .classes("w-full")
                 .style("height: 300px")

@@ -238,13 +238,33 @@ async def delete_volumes():
     app.storage.user['busy'] = True
     auth = (app.storage.user["MAPR_USER"], app.storage.user["MAPR_PASS"])
 
-    # Remove HQ volume
+    # Remove Edge volumes first
+    host = app.storage.user[EDGE]["ip"]
+    volname = get_volume_name(EDGE_VOLUME_PATH)
+    replicated_volname = get_volume_name(EDGE_MISSION_FILES)
+    for volume in [replicated_volname, volname]:
+        URL = f"https://{host}:8443/rest/volume/remove?name={volume}&force=true"
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(URL, auth=auth)
+
+            if response is None or response.status_code != 200:
+                logger.warning("REST failed for delete volume: %s", volume)
+                logger.warning("Response: %s", response.text)
+            else:
+                res = response.json()
+                if res['status'] == "OK":
+                    ui.notify(f"Volume '{volume}' deleted", type='warning')
+                elif res['status'] == "ERROR":
+                    ui.notify(f"{volume}: {res['errors'][0]['desc']}", type='warning')
+                    logger.warning("Error response for delete volume %s: %s", volume, res['errors'][0]['desc'])
+
+    # Remove HQ volumes
     host = app.storage.user[HQ]["ip"]
     volname = get_volume_name(HQ_VOLUME_PATH)
     replicated_volname = get_volume_name(HQ_MISSION_FILES)
     for volume in [replicated_volname, volname]:
 
-        URL = f"https://{host}:8443/rest/volume/remove?name={volume}"
+        URL = f"https://{host}:8443/rest/volume/remove?name={volume}&force=true"
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.post(URL, auth=auth)
 
@@ -260,26 +280,6 @@ async def delete_volumes():
                     ui.notify(f"{volume}: {res['errors'][0]['desc']}", type='warning')
                     logger.warning("Error response for delete volume %s: %s", volume, res['errors'][0]['desc'])
 
-    # Remove Edge volume
-    host = app.storage.user[EDGE]["ip"]
-    volname = get_volume_name(EDGE_VOLUME_PATH)
-    replicated_volname = get_volume_name(EDGE_MISSION_FILES)
-    for volume in [replicated_volname, volname]:
-        URL = f"https://{host}:8443/rest/volume/remove?name={volume}"
-        async with httpx.AsyncClient(verify=False) as client:
-            response = await client.post(URL, auth=auth)
-
-            if response is None or response.status_code != 200:
-                logger.warning("REST failed for delete volume: %s", volume)
-                logger.warning("Response: %s", response.text)
-
-            else:
-                res = response.json()
-                if res['status'] == "OK":
-                    ui.notify(f"Volume '{volume}' deleted", type='warning')
-                elif res['status'] == "ERROR":
-                    ui.notify(f"{volume}: {res['errors'][0]['desc']}", type='warning')
-                    logger.warning("Error response for delete volume %s: %s", volume, res['errors'][0]['desc'])
 
     app.storage.user['busy'] = False
 
@@ -347,13 +347,12 @@ def service_settings(service: tuple):
 
 # create replica stream from HQ to Edge
 async def stream_replica_setup(hqhost: str, user: str, password: str):
-    source_stream_path = HQ_STREAM_REPLICATED
-    target_stream_path = EDGE_STREAM_REPLICATED
+    source_stream_path = f"/mapr/{HQSite['clusterName']}{HQ_STREAM_REPLICATED}"
+    target_stream_path = f"/mapr/{EdgeSite['clusterName']}{EDGE_STREAM_REPLICATED}"
 
     logger.debug("Starting replication to %s", target_stream_path)
-    URL = f"https://{hqhost}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica=/mapr/{EdgeSite['clusterName']}{target_stream_path}&multimaster=true"
+    URL = f"https://{hqhost}:8443/rest/stream/replica/autosetup?path={source_stream_path}&replica={target_stream_path}&multimaster=true"
 
-    # logger.debug("REST_URL: %s", URL)
     try:
         response = await run.io_bound(requests.get, url=URL, auth=(user, password), verify=False)
         response.raise_for_status()
@@ -397,7 +396,7 @@ async def toggle_replication():
     Pause/resume stream replication - EDGE to HQ
     """
 
-    toggle_action = "resume" if app.storage.general["stream_replication"] == "PAUSED" else "pause"
+    toggle_action = "resume" if app.storage.general.get("stream_replication", None) == "PAUSED" else "pause"
 
     REST_URL = f"https://{app.storage.user['EDGE_HOST']}:8443/rest/stream/replica/{toggle_action}?path=/mapr/{EdgeSite['clusterName']}{EDGE_STREAM_REPLICATED}&replica=/mapr/{HQSite['clusterName']}{HQ_STREAM_REPLICATED}"
 
