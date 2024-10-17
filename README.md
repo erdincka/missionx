@@ -6,6 +6,11 @@ In a partially connected world of field teams, seamless communication and data s
 
 In this demo, we are building a data pipeline using 2 Ezmeral Data Fabric cluster that are using microservices to communicate with each other (via message streaming) and providing on-demand access to data relevant to the field team utilising their limited bandwidth by only exchanging messages and files that they requested.
 
+You can install the app on Ezmeral Unified Analytics platform with "Import Framework" option by using [provided helm chart](./helm-package/demoapp-0.0.5.tgz) and [provided image](./helm-package/logoX.png) as its icon. Don't forget to change the "demo" name to 'missionx' (and probably the "endpoint" hostname from demoapp to something you want, ie, missionx) in the values.yaml while importing the app.
+
+If needed, follow the instructions from [Ezmeral documentation](https://docs.ezmeral.hpe.com/unified-analytics/15/ManageClusters/importing-applications.html).
+
+
 ## Prerequisites
 
 Setup Data Fabric clusters with Cross Cluster (Global Namespace) enabled. Refer to [this](./XCLUSTER.md) for details. Optionally create a user with volume, table and stream creation rights. For isolated/standalone demo environments, you can simply use the cluster admin `mapr` user.
