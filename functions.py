@@ -433,10 +433,11 @@ def show_image(host: str, title: str, description: str, imageUrl: str):
 # return image to display on UI
 async def dashboard_tiles(host: str, messages: list):
     """
-    host:
-    messages: list[dict]
+    host: <string> HQ_HOST | EDGE_HOST
+    messages: <list[dict]>
     """
 
+    if host is None: return
     # if source in app.storage.general and len(app.storage.general[source]) > 0:
     # Return an image card if available
     while len(messages) > 0:

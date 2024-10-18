@@ -128,6 +128,6 @@ def edge_page():
 
             with ui.grid(columns=5).classes("w-full"):
                 # The image display widget to show downloaded assets in real-time
-                ui.timer(0.5, lambda: dashboard_tiles(app.storage.user["EDGE_HOST"], tiles))
+                ui.timer(0.5, lambda: dashboard_tiles(app.storage.user.get("EDGE_HOST", None), tiles))
                 # update metrics
                 # ui.timer(0.5, lambda: update_metrics_for(HQ, metric_chart))
