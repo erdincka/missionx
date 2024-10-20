@@ -70,3 +70,7 @@ EOM
 
 
 ```
+
+~~ Add gateway TXT records in the DNS for cross-cluster replication and NFS to work ~~ follow the [documentation](https://docs.ezmeral.hpe.com/datafabric-customer-managed/78/ClusterAdministration/admin/cluster/GenerateGatewayDNS.html)
+
+
