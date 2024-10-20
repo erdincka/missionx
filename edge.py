@@ -61,12 +61,12 @@ def edge_page():
         # Connectivity indicator
         with ui.row().classes("place-items-center"):
             # Setup stream replication -- should be completed in pre-setup
-            # ui.button("Replica", on_click=lambda:
-            #     stream_replica_setup(
-            #         hqhost=app.storage.user["HQ_HOST"],
-            #         user=app.storage.user["MAPR_USER"],
-            #         password=app.storage.user["MAPR_PASS"],
-            #     )).classes("py-0 min-h-0").props("flat")
+            ui.button("Replica", on_click=lambda:
+                stream_replica_setup(
+                    hqhost=app.storage.user["HQ_HOST"],
+                    user=app.storage.user["MAPR_USER"],
+                    password=app.storage.user["MAPR_PASS"],
+                )).classes("py-0 min-h-0").props("flat")
             # Trigger volume mirror
             ui.button("Mirror", on_click=lambda: start_volume_mirroring(
                 edgehost=app.storage.user["EDGE_HOST"],
