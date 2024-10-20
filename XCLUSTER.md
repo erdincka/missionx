@@ -45,32 +45,28 @@ EOM
 
 echo "$cross_cluster_setup" | ssh -t -o StrictHostKeyChecking=no $adminuser@$corehost
 
-# login as root on both clusters and generate tickets
+# login as root on both clusters and generate tickets - following commands require passwordless sudo for adminuser
 
 ssh -o StrictHostKeyChecking=no $adminuser@$corehost <<EOM
-sudo maprlogin -user mapr -cluster <core-cluster-name>
-sudo maprlogin -user mapr -cluster <edge-cluster-name>
+sudo maprlogin password -user $adminuser -cluster <core-cluster-name>
+sudo maprlogin password -user $adminuser -cluster <edge-cluster-name>
 EOM
 
 ssh -o StrictHostKeyChecking=no $adminuser@$edgehost <<EOM
-sudo maprlogin -user mapr -cluster <core-cluster-name>
-sudo maprlogin -user mapr -cluster <edge-cluster-name>
+sudo maprlogin password -user $adminuser -cluster <core-cluster-name>
+sudo maprlogin password -user $adminuser -cluster <edge-cluster-name>
 EOM
 
 # OPTIONAL - Set MCS for cross-cluster communication
 ssh -o StrictHostKeyChecking=no $adminuser@$corehost <<EOM
-maprlogin generateticket -type service -cluster <edge-cluster-name> -user mapr -duration 90:0:0 -out /tmp/maprservice_ticket
+maprlogin generateticket -type service -cluster <edge-cluster-name> -user $adminuser -duration 90:0:0 -out /tmp/maprservice_ticket
 cat /tmp/maprservice_ticket >> /opt/mapr/conf/mapruserticket
 EOM
 
 ssh -o StrictHostKeyChecking=no $adminuser@$edgehost <<EOM
-maprlogin generateticket -type service -cluster <core-cluster-name> -user mapr -duration 90:0:0 -out /tmp/maprservice_ticket
+maprlogin generateticket -type service -cluster <core-cluster-name> -user $adminuser -duration 90:0:0 -out /tmp/maprservice_ticket
 cat /tmp/maprservice_ticket >> /opt/mapr/conf/mapruserticket
 EOM
 
 
 ```
-
-~~ Add gateway TXT records in the DNS for cross-cluster replication and NFS to work ~~ follow the [documentation](https://docs.ezmeral.hpe.com/datafabric-customer-managed/78/ClusterAdministration/admin/cluster/GenerateGatewayDNS.html)
-
-
