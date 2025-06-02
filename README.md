@@ -1,14 +1,14 @@
-# Edge to Core end-to-end data pipeline using Ezmeral Data Fabric
+# Edge to Core end-to-end data pipeline using HPE Data Fabric
 
 ## Summary
 
 In a partially connected world of field teams, seamless communication and data sharing may be critical for the success or failure of a mission, or even resulting in fatal casualties.
 
-In this demo, we are building a data pipeline using 2 Ezmeral Data Fabric cluster that are using microservices to communicate with each other (via message streaming) and providing on-demand access to data relevant to the field team utilising their limited bandwidth by only exchanging messages and files that they requested.
+In this demo, we are building a data pipeline using 2 HPE Data Fabric cluster that are using microservices to communicate with each other (via message streaming) and providing on-demand access to data relevant to the field team utilising their limited bandwidth by only exchanging messages and files that they requested.
 
-You can install the app on Ezmeral Unified Analytics platform with "Import Framework" option by using [provided helm chart](./helm-package/demoapp-0.0.6.tgz) and [provided image](./helm-package/logoX.png) as its icon. Don't forget to change the "demo" name to 'missionx' (and probably the "endpoint" hostname from demoapp to something you want, ie, missionx) in the values.yaml while importing the app.
+You can install the app on HPE PCAI platform with "Import Framework" option by using [provided helm chart](./helm-package/demoapp-0.0.6.tgz) and [provided image](./helm-package/logoX.png) as its icon. Don't forget to change the "demo" name to 'missionx' (and probably the "endpoint" hostname from demoapp to something you want, ie, missionx) in the values.yaml while importing the app.
 
-If needed, follow the instructions from [Ezmeral documentation](https://docs.ezmeral.hpe.com/unified-analytics/15/ManageClusters/importing-applications.html).
+If needed, follow the instructions from [the documentation](https://docs.ezmeral.hpe.com/unified-analytics/15/ManageClusters/importing-applications.html).
 
 
 ## Prerequisites
