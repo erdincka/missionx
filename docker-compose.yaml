@@ -1,0 +1,18 @@
+services:
+  missionx:
+    platform: linux/amd64
+    image: erdincka/missionx
+    container_name: missionx
+    environment:
+      - MAPR_CLUSTER=core
+      - MAPR_IP=10.1.1.20
+      - EDGE_CLUSTER=edge
+      - EDGE_IP=10.1.1.20
+      - MAPR_USER=mapr
+      - MAPR_PASS=mapr
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    # cap_add:
+    #   - SYS_ADMIN
+    privileged: true

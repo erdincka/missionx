@@ -1,0 +1,15 @@
+[project]
+name = "core-edge"
+version = "0.1.0"
+description = "Core to Edge Pipelines with Data Fabric"
+readme = "README.md"
+authors = [
+    { name = "Erdinc Kaya", email = "erdincka@msn.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "importlib-resources>=6.5.2",
+    "nicegui>=2.20.0",
+    "protobuf==3.20.*",
+    "requests>=2.32.4",
+]
