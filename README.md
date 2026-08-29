@@ -12,11 +12,10 @@ operations, where deciding *what* crosses the link matters more than how fast it
 
 ![Regional HQ ingests, catalogues and broadcasts; the edge requests, and only then is the asset mirrored across](core-edge.png)
 
-> **Status: archived.** This was built against a two-cluster Data Fabric setup that is
-> no longer available to test against, so it is unlikely to see further changes.
-> [**satellite**](https://github.com/erdincka/satellite) demonstrates the same
-> edge-and-core pattern, adds a vision model, and runs entirely in one container on a
-> laptop — start there if you want something you can actually run.
+> **Looking for the newer version?** [**satellite**](https://github.com/erdincka/satellite)
+> develops this same edge-and-core pattern further: it adds a vision model at the edge,
+> and it runs entirely in one container on a laptop rather than needing a cluster to try.
+> Start there unless you specifically want the two-cluster arrangement shown here.
 
 ## The flow
 
