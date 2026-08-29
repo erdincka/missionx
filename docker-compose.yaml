@@ -5,9 +5,9 @@ services:
     container_name: missionx
     environment:
       - MAPR_CLUSTER=core
-      - MAPR_IP=10.1.1.20
+      - MAPR_IP=<core-cluster-host>
       - EDGE_CLUSTER=edge
-      - EDGE_IP=10.1.1.20
+      - EDGE_IP=<edge-cluster-host>
       - MAPR_USER=mapr
       - MAPR_PASS=mapr
     ports:

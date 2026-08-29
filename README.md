@@ -1,73 +1,105 @@
-# Edge to Core end-to-end data pipeline using HPE Data Fabric
+# MissionX — an edge-to-core data pipeline for partially connected teams
 
-## Summary
+When a field team is on an intermittent link, the expensive mistake is replicating
+everything to them by default. **MissionX** demonstrates the opposite arrangement across
+two [HPE Data Fabric](https://www.hpe.com/us/en/hpe-ezmeral-data-fabric.html) clusters:
+headquarters continuously broadcasts small *descriptions* of new assets to every field
+site, and bulk data crosses the link only when a team explicitly asks for it — and only
+when they choose to spend the bandwidth. Messages flow both ways over a single
+bidirectional replicated stream, so the field site needs no direct access to HQ storage.
+It is a reference for anyone designing systems for disconnected or bandwidth-constrained
+operations, where deciding *what* crosses the link matters more than how fast it goes.
 
-In a partially connected world of field teams, seamless communication and data sharing may be critical for the success or failure of a mission, or even resulting in fatal casualties.
+![Regional HQ ingests, catalogues and broadcasts; the edge requests, and only then is the asset mirrored across](core-edge.png)
 
-In this demo, we are building a data pipeline using 2 HPE Data Fabric cluster that are using microservices to communicate with each other (via message streaming) and providing on-demand access to data relevant to the field team utilising their limited bandwidth by only exchanging messages and files that they requested.
+> **Status: archived.** This was built against a two-cluster Data Fabric setup that is
+> no longer available to test against, so it is unlikely to see further changes.
+> [**satellite**](https://github.com/erdincka/satellite) demonstrates the same
+> edge-and-core pattern, adds a vision model, and runs entirely in one container on a
+> laptop — start there if you want something you can actually run.
 
-You can install the app on HPE PCAI platform with "Import Framework" option by using [provided helm chart](./helm-package/demoapp-0.0.6.tgz) and [provided image](./helm-package/logoX.png) as its icon. Don't forget to change the "demo" name to 'missionx' (and probably the "endpoint" hostname from demoapp to something you want, ie, missionx) in the values.yaml while importing the app.
+## The flow
 
-If needed, follow the instructions from [the documentation](https://docs.ezmeral.hpe.com/unified-analytics/15/ManageClusters/importing-applications.html).
+### At headquarters
 
+| Service | What it does |
+|---|---|
+| **Image Feed** | Every few seconds, publishes metadata for a few assets onto the pipeline stream — a description and a download link, not the data |
+| **Image Download** | Picks those up, downloads the actual file, stores it in a Data Fabric volume, and marks the asset ready |
+| **Asset Broadcast** | Publishes ready assets onto the *replicated* stream, so every field site sees them |
+| **Asset Response** | Listens on `ASSET_REQUEST`; when a team asks for something, copies the file into a mirrored volume |
+
+### At the edge
+
+The field team first confirms upstream communication — that the replicated stream is
+receiving messages and the volume can mirror. **Broadcast Listener** then populates a
+table with everything HQ has announced. Marking a row as wanted makes **Asset Request**
+publish to `ASSET_REQUEST`, and the row shows as *Requested*.
+
+HQ responds by copying the file into the mirrored volume. The team then starts
+**Asset Viewer** and re-initiates the mirror to pull the data down. That last step stays
+manual by design: the field team decides when to use their link.
+
+Because Data Fabric streams are multi-master, one replicated stream carries
+`ASSET_BROADCAST` outwards from HQ and `ASSET_REQUEST` back from the field. Expect a
+minute or two end to end — replication is asynchronous, and the app adds deliberate
+delays so the flow is watchable.
+
+The sample assets are drawn from a real 2014 public imagery feed.
 
 ## Prerequisites
 
-Setup Data Fabric clusters with Cross Cluster (Global Namespace) enabled. Refer to [this](./XCLUSTER.md) for details. Optionally create a user with volume, table and stream creation rights. For isolated/standalone demo environments, you can simply use the cluster admin `mapr` user.
+Two Data Fabric clusters with **cross-cluster global namespace** enabled — see
+[XCLUSTER.md](./XCLUSTER.md), and the vendor guide for
+[configuring gateways for table and stream replication](https://docs.ezmeral.hpe.com/datafabric-customer-managed/78/Gateways/ConfiguringMapRGatewaysForTRAndI.html).
 
-Data Fabric core cluster should have following packages installed and configured:
+Required on the core cluster:
 
 ```bash
-# mapr-hivemetastore
 mapr-kafka
-mapr-nfs4server # or mapr-nfs ### Global Namespace with external NFS mount will work only with mapr-nfs4server
-mapr-data-access-gateway # used for REST API access
-mapr-gateway # used for stream replication
-# mapr-hbase
+mapr-nfs4server           # global namespace over external NFS needs nfs4server, not mapr-nfs
+mapr-data-access-gateway  # REST API access
+mapr-gateway              # stream replication
 ```
 
-You will need to enable cluster and data auditing in the cluster to be able to monitor stream replication status. If you use the cluster admin 'mapr' user, these will be configured automatically with the Initial configuration step below.
+Enable cluster and data auditing to see replication status. A user with volume, table
+and stream creation rights is enough; on an isolated demo cluster the admin (`mapr`)
+user is simplest, and the setup step will configure auditing for you.
 
-Additionally, you need to [Configure Gateways for Table and Stream Replication](https://docs.ezmeral.hpe.com/datafabric-customer-managed/78/Gateways/ConfiguringMapRGatewaysForTRAndI.html#task_clg_ywy_5t).
+## Running it
 
-### Initial configuration
+### With Docker
 
-Use the disconnected link icon to complete initial setup. This will require you to provide the host details to connect to the Data Fabric node where Data Access Gateway service is running. It will update the app configuration, and create the required (/apps/missionX and /apps/missionX/files) volumes and streams on the Data Fabric cluster.
+```bash
+docker compose up -d
+```
 
-## Demo Flow
+Set `MAPR_IP` and `EDGE_IP` in `docker-compose.yaml` to your two clusters first. The
+interface is then at <http://localhost:3000>.
 
-### HQ Services
+### On Kubernetes
 
-First step of our data flow is the ingest data from simulated IMAGE Feed service. This service will select a few random messages on each run (every few seconds) from the pre-integrated set of files (which is taken from real IMAGE feed from 2014), and publishes them into the Pipeline stream as an available asset information. This message contains limited information (metadata) regarding the asset and provides a link to download the actual data (image/video).
+Import [`helm-package/demoapp-0.0.6.tgz`](./helm-package/demoapp-0.0.6.tgz) with
+[`helm-package/logoX.png`](./helm-package/logoX.png) as the logo. On HPE Private Cloud
+AI this is the **Import Framework** wizard; see the
+[vendor instructions](https://docs.ezmeral.hpe.com/unified-analytics/15/ManageClusters/importing-applications.html).
+Change the release name from `demo` to `missionx`, and set the endpoint hostname to
+match, in `values.yaml` during import.
 
-Next service, Image Download Service, automatically picks up messages from the Pipeline stream, and attempts to download the actual asset data from the link in the message. This file will then be copied into the Ezmeral Data Fabric volume for persistence. Image Download Service will then update the message with a status code that indicates asset is ready to be broadcasted.
+### First run
 
-The Asset Broadcast Service will monitor the pipeline to see the assets that are ready to be broadcasted to the field teams. Once Image Download Service marks an asset as downloaded, Asset Broadcast Service will publish that asset information into a replicated stream, which will make the message available to all the replicas (every edge cluster, or field team) so they can see updated information as they become available.
+Use the **disconnected link** icon to run initial setup. It asks for the host running
+the Data Access Gateway, then creates the `/apps/missionX` and `/apps/missionX/files`
+volumes and the streams the demo needs.
 
-Final HQ service, Asset Response Service is waiting for a specific topic (ASSET_REQUEST) that has messages for the assets requested from the field teams, and responds to these requests by copying the actual asset data into a mirrored volume. So once the response is complete, field teams can re-initiate the mirroring to get the asset data on their cluster.
+## Notes
 
-### Edge Services
+- Click a running service's name in the left-hand list to stop it. Useful when there
+  are too many tiles to follow — and services do occasionally fail silently without the
+  UI noticing, in which case stop and restart them.
+- The switch at the top right enables debug logging.
 
-Edge teams first need to ensure Upstream Communication is enabled, meaning the replicated stream is receiving message, and Volume can start mirroring when they made a request for an asset.
+## Built with
 
-Stream replication happens continuously as long as connectivity between clusters is established.
-
-When the Broadcast Listener Service is started, it will monitor the replica stream for any broadcasted asset, and will place the information into the table for the team to monitor/select.
-
-Asset Request Service will wait for any message that is marked as "Requesting..." from the table, which in turn will publish a message to the "ASSET_REQUEST" topic. Since the Data Fabric Streams are bi-directional (multi-master), we can have "ASSET_BROADCAST" topic to publish messages from HQ to all field teams, and "ASSET_REQUEST" topic to publish messages from the field teams back to the HQ. Once the request is published, you will see the asset being marked as "Requested" on the table.
-
-At that point, you would monitor the tiles on HQ side, which should show an "Asset Response" for the requested asset, which means the data is copied and available on the mirrored volume. This may take a few minutes due to delays introduced in the app (so not everything flows very fast) and also for the fact that stream replication is not synchronous.
-
-Once the asset request is responded, then the field team can start Asset Viewer Service and then re-initiate the volume mirror to get the asset data files to be sent. This process also can take from few seconds to a minute, but then you should see the tile being displayed with the actual asset data (image) copied from the HQ volume. We keep volume mirror as a manual process to give full control to the field team on when they would like to use their bandwidth for data transfers.
-
-## Demo Highlights
-
-TBD
-
-## NOTES
-
-You may stop running apps by clicking on their names at the left hand side list. This may be useful if there are too many messages and/or tiles flowing and you have troubles finding the ones that you are interested.
-
-It is also useful, since at times services may fail silently, but UI is not updated with that. In those cases, just stop the services and restart them.
-
-You can also enable debug logging to see the details of the flow using the switch at the top-right corner.
+Python 3.12 and [NiceGUI](https://nicegui.io), talking to Data Fabric over its REST API,
+OJAI tables and streams.
